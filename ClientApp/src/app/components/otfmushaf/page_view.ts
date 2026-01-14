@@ -214,7 +214,7 @@ class PageView {
           innerSpan.classList.add("bismfeature")
           if (isSafari) {
             if(this.quranTextService.mushafType != MushafLayoutType.IndoPak15Lines){
-              innerSpan.style.left = 350 * scale + "px";
+              innerSpan.style.left = 700 *  glyphScale + "px";
             }            
             innerSpan.style.fontSize = this.viewport.fontSize + "px"
           }
@@ -222,9 +222,9 @@ class PageView {
           innerSpan.classList.add("basmfeature");
           if (isSafari) {
             if(this.quranTextService.mushafType === MushafLayoutType.NewMadinah){
-              innerSpan.style.left = 700 * scale + "px";
+              innerSpan.style.left = 900 *  glyphScale + "px";
             } else if(this.quranTextService.mushafType == MushafLayoutType.OldMadinah){
-              innerSpan.style.right = 1500 * scale + "px";
+              innerSpan.style.right = 2000 *  glyphScale + "px";
             }              
             innerSpan.style.fontSize = this.viewport.fontSize * 0.9 + "px"
           }
