@@ -1,6 +1,5 @@
 /*
  * Copyright 2012 Mozilla Foundation (Some code is derived from https://github.com/mozilla/pdf.js/blob/master/web/pdf_page_view.js)
- * Copyright (c) 2019-2020 Amine Anane. http: //digitalkhatt/license  
 */
 import { MushafLayoutType, QuranTextService } from "../../services/qurantext.service";
 import { TajweedService } from "../../services/tajweed.service";
