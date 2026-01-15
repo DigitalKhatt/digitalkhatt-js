@@ -5,7 +5,7 @@
     <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
     <TypeScriptToolsVersion>Latest</TypeScriptToolsVersion>
     <IsPackable>false</IsPackable>
-    <SpaRoot>ClientApp\</SpaRoot>
+    <SpaRoot>..\site-angular\</SpaRoot>
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
 
     <!-- Set this to true if you enable server-side prerendering -->
@@ -18,36 +18,36 @@
 
   <ItemGroup>
     <!-- Don't publish the SPA source files, but do show them in the project files list -->
-    <Compile Remove="ClientApp\custom_typings\**" />
-    <Compile Remove="ClientApp\src\app\viewer\**" />
+    <Compile Remove="$(SpaRoot)custom_typings\**" />
+    <Compile Remove="$(SpaRoot)src\app\viewer\**" />
     <Content Remove="$(SpaRoot)**" />
-    <Content Remove="ClientApp\custom_typings\**" />
-    <Content Remove="ClientApp\src\app\viewer\**" />
-    <EmbeddedResource Remove="ClientApp\custom_typings\**" />
-    <EmbeddedResource Remove="ClientApp\src\app\viewer\**" />
+    <Content Remove="$(SpaRoot)custom_typings\**" />
+    <Content Remove="$(SpaRoot)src\app\viewer\**" />
+    <EmbeddedResource Remove="$(SpaRoot)custom_typings\**" />
+    <EmbeddedResource Remove="$(SpaRoot)src\app\viewer\**" />
     <None Remove="$(SpaRoot)**" />
-    <None Remove="ClientApp\custom_typings\**" />
-    <None Remove="ClientApp\src\app\viewer\**" />
+    <None Remove="$(SpaRoot)custom_typings\**" />
+    <None Remove="$(SpaRoot)src\app\viewer\**" />
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="ClientApp\src\app\components\precomputed\baseforce.ts" />
-    <None Remove="ClientApp\src\app\components\precomputed\constant.ts" />
-    <None Remove="ClientApp\src\app\components\precomputed\glyphpath.ts" />
-    <None Remove="ClientApp\src\app\components\precomputed\layout.ts" />
-    <None Remove="ClientApp\src\app\components\precomputed\markbaseforce.ts" />
-    <None Remove="ClientApp\tsconfig.json" />
+    <None Remove="$(SpaRoot)src\app\components\precomputed\baseforce.ts" />
+    <None Remove="$(SpaRoot)src\app\components\precomputed\constant.ts" />
+    <None Remove="$(SpaRoot)src\app\components\precomputed\glyphpath.ts" />
+    <None Remove="$(SpaRoot)src\app\components\precomputed\layout.ts" />
+    <None Remove="$(SpaRoot)src\app\components\precomputed\markbaseforce.ts" />
+    <None Remove="$(SpaRoot)tsconfig.json" />
   </ItemGroup>
 
   <ItemGroup>
-    <TypeScriptCompile Remove="ClientApp\src\app\components\precomputed\page_view.ts" />
-    <TypeScriptCompile Remove="ClientApp\src\app\components\precomputed\precomputed.component.ts" />
-    <TypeScriptCompile Remove="ClientApp\src\app\components\precomputed\rendering_states.ts" />
+    <TypeScriptCompile Remove="$(SpaRoot)src\app\components\precomputed\page_view.ts" />
+    <TypeScriptCompile Remove="$(SpaRoot)src\app\components\precomputed\precomputed.component.ts" />
+    <TypeScriptCompile Remove="$(SpaRoot)src\app\components\precomputed\rendering_states.ts" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="ClientApp\tsconfig.json" />
+    <Content Include="$(SpaRoot)tsconfig.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,11 +55,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="ClientApp\src\app\components\about\" />
+    <Folder Include="$(SpaRoot)src\app\components\about\" />
   </ItemGroup>
 
   <ItemGroup>
-    <TypeScriptCompile Update="ClientApp\src\app\components\precomputed\baseforce.ts">
+    <TypeScriptCompile Update="$(SpaRoot)src\app\components\precomputed\baseforce.ts">
       <SubType>Code</SubType>
     </TypeScriptCompile>
   </ItemGroup>  
@@ -82,13 +82,21 @@
 
     <!-- Include the newly-built files in the publish output -->
     <ItemGroup>
+      <!--
       <DistFiles Include="$(SpaRoot)dist\**; $(SpaRoot)dist-server\**" />
       <DistFiles Include="$(SpaRoot)node_modules\**" Condition="'$(BuildServerSideRenderer)' == 'true'" />
       <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
         <RelativePath>%(DistFiles.Identity)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
+      -->
+      <DistFiles Include="$(SpaRoot)dist\**" />
+      <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>angular\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
     </ItemGroup>
+    
   </Target>
 
 </Project>
