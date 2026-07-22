@@ -1,5 +1,7 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
+serve-4300.sh
+
 # compiled output
 /dist
 /dist-server

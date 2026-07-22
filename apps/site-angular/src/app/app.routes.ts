@@ -10,6 +10,7 @@ import { CompareMushafComponent } from './components/comparemushaf/comparemushaf
 import { PageNotFoundComponent } from './components/pagenotfound/pagenotfound.component';
 import { PrecomputedComponent } from './components/precomputed/precomputed.component';
 import { OTFMushafComponent } from './components/otfmushaf/otfmushaf.component';
+import { WasmMasahifComponent } from './components/wasm_masahif/quran.component';
 
 export const routes: Routes = [
   {
@@ -78,6 +79,31 @@ export const routes: Routes = [
         data: {
           type: 'indopak15'
         },
+      }
+    ]
+  },
+  {
+    path: 'wasm',
+    children: [
+      {
+        path: 'newmedina',
+        component: WasmMasahifComponent,
+        providers: [{ provide: MUSHAFLAYOUTTYPE, useValue: MushafLayoutType.NewMadinah }],
+        data: {
+          type: 'newmedina'
+        },
+      },
+      {
+        path: 'oldmedina',
+        component: WasmMasahifComponent,
+        providers: [{ provide: MUSHAFLAYOUTTYPE, useValue: MushafLayoutType.OldMadinah }],
+        data: { type: 'oldmedina' },
+      },
+      {
+        path: 'indopak15',
+        component: WasmMasahifComponent,
+        providers: [{ provide: MUSHAFLAYOUTTYPE, useValue: MushafLayoutType.IndoPak15Lines }],
+        data: { type: 'indopak15' },
       }
     ]
   },
