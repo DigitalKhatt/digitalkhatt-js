@@ -36,6 +36,15 @@ const FONT_FILES = ['glyphs.mp', 'features.fea', 'parameters.json'] as const;
 // layout, and just.service.ts's INTERLINE constant used by the DOM-based
 // hbmedina renderer for the same decorative sura-name frame.
 const INTERLINE_DESIGN_UNITS = 1800;
+// Matches OtLayout::TopSpace. line.ystartposition is effectively each
+// line's baseline-ish anchor (glyphs render with no vertical offset from
+// it), sitting TopSpace design units below that line's own box top -- true
+// for every line uniformly, since currentyPos in FeatureJustifier.cpp starts
+// at TopSpace and advances by a constant InterLineSpacing per line with no
+// per-type adjustment. Confirmed empirically against hbmedina's DOM
+// rendering: page 1's `.linesuran` (line 0) sits at offset 0 from the page
+// top, i.e. ystartposition[0] - TopSpace == 0, not ystartposition[0] itself.
+const TOP_SPACE_DESIGN_UNITS = 1130;
 
 @Injectable()
 export class WasmMushafService implements OnDestroy {
@@ -174,10 +183,14 @@ export class WasmMushafService implements OnDestroy {
     const img = this.ayaFrameImage;
     if (!img?.naturalWidth) return;
 
-    const halfHeight = (INTERLINE_DESIGN_UNITS << this.otLayout.scaleBy()) / 2;
+    const scaleBy = this.otLayout.scaleBy();
+    const interLine = INTERLINE_DESIGN_UNITS << scaleBy;
+    // Top of this line's box, not ystartposition itself -- see
+    // TOP_SPACE_DESIGN_UNITS above.
+    const boxTop = ystartposition - (TOP_SPACE_DESIGN_UNITS << scaleBy);
 
-    const corner1 = new DOMPoint(margin, ystartposition + halfHeight).matrixTransform(outerTransform);
-    const corner2 = new DOMPoint(margin + pageWidth, ystartposition - halfHeight).matrixTransform(outerTransform);
+    const corner1 = new DOMPoint(margin, boxTop).matrixTransform(outerTransform);
+    const corner2 = new DOMPoint(margin + pageWidth, boxTop + interLine).matrixTransform(outerTransform);
 
     const x = Math.min(corner1.x, corner2.x);
     const y = Math.min(corner1.y, corner2.y);

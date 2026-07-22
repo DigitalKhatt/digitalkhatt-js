@@ -1,0 +1,10 @@
+<div class="pageNumberBoxBoundry">
+  <div id="pageNumberBoxBoundry" style="position:absolute;height:100%;width:100%;">
+
+    <div [hidden]="!loaded" class="pagenumber-box" cdkDragBoundary="#pageNumberBoxBoundry" cdkDrag cdkDragLockAxis="y"
+         [cdkDragFreeDragPosition]="dragPosition"
+         (cdkDragMoved)="dragMoved($event)">
+      {{pageNumber}}
+    </div>
+  </div>
+</div>

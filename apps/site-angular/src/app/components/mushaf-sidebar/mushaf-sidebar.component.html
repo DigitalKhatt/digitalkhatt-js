@@ -1,0 +1,10 @@
+<div style="width: 100%; padding: 0px; box-sizing: border-box; display: flex; flex-direction: column; height: 100%;">
+  <mat-card appearance="outlined" style="overflow: auto; " mat-elevation-z8>
+
+    <div *ngFor="let item of outline">
+      <button mat-button type="button" (click)="select(item)" style="direction: rtl; width: 100%; text-align: right; font-family: madina;font-size:larger">{{item.name}}</button>
+    </div>
+
+  </mat-card>
+
+</div>

@@ -14,10 +14,11 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { MatDialog } from '@angular/material/dialog';
 import { AboutComponent } from '../about/about.component';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
-import { CdkDrag, DragRef, Point } from '@angular/cdk/drag-drop';
 import { CdkScrollable, ScrollDispatcher } from '@angular/cdk/scrolling';
 import { commonModules } from '../../app.config';
 import { MushafLayoutType, MUSHAFLAYOUTTYPE, NewMadinahQuranTextService, OldMadinahQuranTextService, QuranTextIndopak15Service, QuranTextService } from '../../services/qurantext.service';
+import { MushafSidebarComponent } from '../mushaf-sidebar/mushaf-sidebar.component';
+import { PageNumberBoxComponent } from '../page-number-box/page-number-box.component';
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 10.0;
@@ -33,13 +34,19 @@ export interface PageFormat {
   hasRestrictedScaling?: boolean
 }
 
-// OtLayout::TopSpace / OtLayout::InterLineSpacing (design units), converted to
-// the same "255x410 pt" page-space printPage() targets (72 / 4800 pt/unit).
-// Unlike hbmedina's DOM-flowed lines, the WASM engine positions every line at
-// a fixed pitch independent of font scale, so this must not be multiplied by
-// fontScale the way hbmedina's viewport.fontSize-based line height is.
+// OtLayout::InterLineSpacing (design units), converted to the same "255x410
+// pt" page-space printPage() targets (72 / 4800 pt/unit). Unlike hbmedina's
+// DOM-flowed lines, the WASM engine positions every line at a fixed pitch
+// independent of font scale, so this must not be multiplied by fontScale the
+// way hbmedina's viewport.fontSize-based line height is.
+//
+// Line N's box top is N * InterLineSpacing -- NOT OtLayout::TopSpace +
+// N * InterLineSpacing, which is line.ystartposition itself (see
+// wasm-mushaf.service.ts's TOP_SPACE_DESIGN_UNITS comment: ystartposition is
+// each line's baseline-ish anchor, sitting TopSpace below its own box top).
+// Confirmed against hbmedina: its own setOutline() has no per-line TopSpace
+// term either, just a small fixed paddingTop.
 const POINTS_PER_DESIGN_UNIT = 72 / 4800;
-const TOP_SPACE_PT = 1450 * POINTS_PER_DESIGN_UNIT;
 const INTERLINE_PT = 1800 * POINTS_PER_DESIGN_UNIT;
 
 class PDFPageViewBuffer {
@@ -118,7 +125,7 @@ const DEFAULT_CACHE_SIZE = 10;
     '[class.indopak]': 'mushafType == MushafLayoutTypeEnum.IndoPak15Lines'
   },
   providers: [WasmMushafService],
-  imports: [...commonModules, RouterOutlet, RouterLink]
+  imports: [...commonModules, RouterOutlet, RouterLink, MushafSidebarComponent, PageNumberBoxComponent]
 })
 export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
 
@@ -160,14 +167,12 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
   maxPages: number;
   currentPageNumber;
   scrollState;
-  pageNumberBoxIsMoved: boolean;
-  dragPosition;
   disableScroll = false;
   debug = false;
 
   @ViewChildren('page') pageElements: QueryList<ElementRef>;
   @ViewChild('testcanvas', { static: false }) testcanvasRef: ElementRef;
-  @ViewChild(CdkDrag, { static: false }) pageNumberBoxRef: CdkDrag;
+  @ViewChild(PageNumberBoxComponent, { static: false }) pageNumberBox: PageNumberBoxComponent;
 
   @ViewChild('viewerContainer', { static: false, read: CdkScrollable }) firstMyCustomDirective: CdkScrollable;
 
@@ -191,8 +196,6 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
   fontScale: number;
   visibleViews;
   loaded: boolean = false;
-
-  constrainPosition: (point: Point, dragRef: DragRef) => Point;
 
   hideElement: boolean = false;
 
@@ -291,10 +294,6 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.itemSize = this.pageSize.height;
 
-    this.pageNumberBoxIsMoved = false;
-
-    this.dragPosition = { x: 0, y: 0 }
-
     let userAgent = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
     let isAndroid = /Android/.test(userAgent);
     let isIOS = /\b(iPad|iPhone|iPod)(?=;)/.test(userAgent);
@@ -303,8 +302,6 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
       this.maxCanvasPixels = 5242880;
     }
 
-    this.constrainPosition = this.adjustPageNumBoxPosition.bind(this);
-
     this.fontsize = this.defaultFontSize;
 
   }
@@ -312,36 +309,11 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit() {
   }
 
-  adjustPageNumBoxPosition(point: Point, dragRef: DragRef): Point {
-
-    if (this.pageNumberBoxRef) {
-
-      var box = this.pageNumberBoxRef.element.nativeElement;
-
-      var pos: any = this.pageNumberBoxRef.getFreeDragPosition();
-
-      var toolbarHeight = 48;
-
-      var min = 60; //toolbarHeight + box.offsetHeight;
-
-      if (point.y < min) {
-        point.y = min;
-      }
-
-      var max = box.parentElement.clientHeight - box.offsetHeight + min;
-
-      if (point.y > max) {
-        point.y = max;
-      }
-
-    }
-
-    return point;
-  }
-
   ngAfterViewInit() {
 
     this.viewAreaElement = this.firstMyCustomDirective.getElementRef().nativeElement;
+
+    this.pageNumberBox.scrollable = this.firstMyCustomDirective;
 
     this.setViewport(this.getScale(this.zoomCtrl.value), false);
 
@@ -507,7 +479,7 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.isSideBySide = width >= this.sideBySideWidth;
 
-    this.movePageNumberBox();
+    this.pageNumberBox?.move();
 
     this.ngZone.runOutsideAngular(() => {
       this.updateWidth(true);
@@ -572,7 +544,7 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
 
   setOutline(outline) {
 
-    const y = (TOP_SPACE_PT + INTERLINE_PT * outline.lineIndex) * this.scale;
+    const y = 14 + INTERLINE_PT * outline.lineIndex * this.scale;
 
     let offset = outline.pageIndex * this.itemSize + y;
     this.currentPageNumber = outline.pageIndex + 1;
@@ -911,43 +883,6 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  pageNumberBoxMoved(event) {
-
-    var box = this.pageNumberBoxRef.element.nativeElement;
-
-    var pos: any = this.pageNumberBoxRef.getFreeDragPosition();
-
-    var height = box.parentElement.clientHeight - box.offsetHeight;
-
-    var oldoffset = this.firstMyCustomDirective.measureScrollOffset('top');
-
-    if ((pos.y === 0 && oldoffset === 0)
-      || (pos.y === height && (oldoffset + this.viewAreaElement.clientHeight) === this.viewAreaElement.scrollHeight))
-      return;
-
-    var offset = Math.floor(pos.y / height * this.viewAreaElement.scrollHeight);
-
-    this.pageNumberBoxIsMoved = true;
-    this.firstMyCustomDirective.scrollTo({ top: offset });
-
-  }
-
-  movePageNumberBox() {
-
-    var offset = this.firstMyCustomDirective.measureScrollOffset('top');
-
-    if (this.viewAreaElement.scrollHeight) {
-      var perc = offset / (this.viewAreaElement.scrollHeight);
-
-      var box = this.pageNumberBoxRef.element.nativeElement;
-
-      var top = Math.floor((box.parentElement.clientHeight - box.offsetHeight) * perc);
-
-      this.dragPosition = { x: 0, y: top };
-    }
-
-  }
-
   private scrollUpdated() {
 
     let currentX = this.viewAreaElement.scrollLeft;
@@ -963,11 +898,7 @@ export class WasmMasahifComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.scrollState.lastY = currentY;
 
-    if (!this.pageNumberBoxIsMoved) {
-      this.movePageNumberBox();
-    } else {
-      this.pageNumberBoxIsMoved = false;
-    }
+    this.pageNumberBox?.syncToScroll();
 
     this.ngZone.runOutsideAngular(() => {
       this.update();

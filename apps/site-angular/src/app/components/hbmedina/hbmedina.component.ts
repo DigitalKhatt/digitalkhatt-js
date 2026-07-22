@@ -12,7 +12,6 @@ import { PageView } from './page_view';
 
 //import * as Hammer from 'hammerjs';
 
-import { CdkDrag, DragRef, Point } from '@angular/cdk/drag-drop';
 import { CdkScrollable, ScrollDispatcher } from '@angular/cdk/scrolling';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
@@ -24,6 +23,8 @@ import { MushafLayoutType, NewMadinahQuranTextService, OldMadinahQuranTextServic
 import { TajweedService } from '../../services/tajweed.service';
 import { saveAs } from 'file-saver-es';
 import { commonModules } from '../../app.config';
+import { MushafSidebarComponent } from '../mushaf-sidebar/mushaf-sidebar.component';
+import { PageNumberBoxComponent } from '../page-number-box/page-number-box.component';
 
 
 const CSS_UNITS = 96.0 / 72.0;
@@ -114,7 +115,7 @@ const DEFAULT_CACHE_SIZE = 10;
     '[class.indopak]': 'mushafType == MushafLayoutTypeEnum.IndoPak15Lines'
   },
   providers: [TajweedService],
-  imports: [...commonModules, RouterOutlet, RouterLink]
+  imports: [...commonModules, RouterOutlet, RouterLink, MushafSidebarComponent, PageNumberBoxComponent]
 })
 export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
 
@@ -156,8 +157,6 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
   currentPageNumber;
   scrollState;
   texFormat: boolean;
-  pageNumberBoxIsMoved: boolean;
-  dragPosition;
   disableScroll: boolean = false;
   debug = false;
 
@@ -165,7 +164,7 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('testcanvas', { static: false }) testcanvasRef: ElementRef;
   @ViewChild('calculatewidthElem', { static: false }) calculatewidthElem: ElementRef;
   @ViewChild('lineJustify', { static: false }) lineJustify: ElementRef;
-  @ViewChild(CdkDrag, { static: false }) pageNumberBoxRef: CdkDrag;
+  @ViewChild(PageNumberBoxComponent, { static: false }) pageNumberBox: PageNumberBoxComponent;
 
   //@ViewChild(CdkScrollable, { static: false }) firstMyCustomDirective: CdkScrollable;
   @ViewChild('viewerContainer', { static: false, read: CdkScrollable }) firstMyCustomDirective: CdkScrollable;
@@ -195,8 +194,6 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
 
 
   wasmStatus;
-
-  constrainPosition: (point: Point, dragRef: DragRef) => Point;
 
   hideElement: boolean = false;
 
@@ -308,13 +305,6 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.itemSize = this.pageSize.height;
 
-    this.pageNumberBoxIsMoved = false;
-
-    this.dragPosition = { x: 0, y: 0 }
-
-
-    this.constrainPosition = this.adjustPageNumBoxPosition.bind(this);
-
     this.fontsize = this.defaultFontSize;
 
   }
@@ -326,6 +316,8 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
   ngAfterViewInit() {
 
     this.viewAreaElement = this.firstMyCustomDirective.getElementRef().nativeElement;
+
+    this.pageNumberBox.scrollable = this.firstMyCustomDirective;
 
     //this.loaded = true;
     setTimeout(() => {
@@ -443,34 +435,6 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.update();
     });
   }
-  adjustPageNumBoxPosition(point: Point, dragRef: DragRef): Point {
-
-    if (this.pageNumberBoxRef) {
-
-      var box = this.pageNumberBoxRef.element.nativeElement;
-
-      var pos: any = this.pageNumberBoxRef.getFreeDragPosition();
-
-
-      var toolbarHeight = 48;
-
-      var min = 60; //toolbarHeight + box.offsetHeight;
-
-      if (point.y < min) {
-        point.y = min;
-      }
-
-      var max = box.parentElement.clientHeight - box.offsetHeight + min;
-
-      if (point.y > max) {
-        point.y = max;
-      }
-
-    }
-
-    return point;
-  }
-
   formatLabel(value: number) {
 
     return Math.round(value * 100) + '%';
@@ -542,7 +506,7 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.isSideBySide = width >= this.sideBySideWidth;
 
-    this.movePageNumberBox();
+    this.pageNumberBox?.move();
 
     this.ngZone.runOutsideAngular(() => {
       this.updateWidth(false);
@@ -949,46 +913,6 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  pageNumberBoxMoved(event) {
-
-    var box = this.pageNumberBoxRef.element.nativeElement;
-
-    var pos: any = this.pageNumberBoxRef.getFreeDragPosition();
-
-    //var height = this.viewAreaElement.clientHeight - box.offsetHeight;
-    var height = box.parentElement.clientHeight - box.offsetHeight;
-
-    var oldoffset = this.firstMyCustomDirective.measureScrollOffset('top');
-
-    if ((pos.y === 0 && oldoffset === 0)
-      || (pos.y === height && (oldoffset + this.viewAreaElement.clientHeight) === this.viewAreaElement.scrollHeight))
-      return;
-
-    var offset = Math.floor(pos.y / height * this.viewAreaElement.scrollHeight);
-
-    this.pageNumberBoxIsMoved = true;
-    this.firstMyCustomDirective.scrollTo({ top: offset });
-
-
-
-  }
-
-  movePageNumberBox() {
-
-    var offset = this.firstMyCustomDirective.measureScrollOffset('top');
-
-    if (this.viewAreaElement.scrollHeight) {
-      var perc = offset / (this.viewAreaElement.scrollHeight);
-
-      var box = this.pageNumberBoxRef.element.nativeElement;
-
-      var top = Math.floor((box.parentElement.clientHeight - box.offsetHeight) * perc);
-
-      this.dragPosition = { x: 0, y: top };
-    }
-
-  }
-
   private scrollUpdated() {
 
     let currentX = this.viewAreaElement.scrollLeft;
@@ -1004,11 +928,7 @@ export class HBMedinaComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.scrollState.lastY = currentY;
 
-    if (!this.pageNumberBoxIsMoved) {
-      this.movePageNumberBox();
-    } else {
-      this.pageNumberBoxIsMoved = false;
-    }
+    this.pageNumberBox?.syncToScroll();
 
     this.ngZone.runOutsideAngular(() => {
       this.update();

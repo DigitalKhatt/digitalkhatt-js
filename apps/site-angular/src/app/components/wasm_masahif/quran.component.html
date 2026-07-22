@@ -91,28 +91,10 @@
                          role="main" style="height:100% !important;background-color:white;">
 
     <mat-sidenav [ngClass]="{'collapsed': !isSideBySide}" #sidenav class="sidenav" [mode]="mode" [opened]="isOpened" (openedChange)="updateHostClasses()">
-      <div style="width: 100%; padding: 0px; box-sizing: border-box; display: flex; flex-direction: column; height: 100%;">
-        <mat-card appearance="outlined" style="overflow: auto; " mat-elevation-z8>
-
-          <div *ngFor="let item of outline">
-            <button mat-button type="button" (click)="setOutline(item)" style="direction: rtl; width: 100%; text-align: right; font-size:larger">{{item.name}}</button>
-          </div>
-
-        </mat-card>
-
-      </div>
+      <app-mushaf-sidebar [outline]="outline" (outlineSelected)="setOutline($event)"></app-mushaf-sidebar>
     </mat-sidenav>
     <mat-sidenav-content>
-      <div class="pageNumberBoxBoundry">
-        <div id="pageNumberBoxBoundry" style="position:absolute;height:100%;width:100%;">
-
-          <div [hidden]="!loaded" #pageNumberBox class="pagenumber-box" cdkDragBoundary="#pageNumberBoxBoundry" cdkDrag cdkDragLockAxis="y"
-               [cdkDragFreeDragPosition]="dragPosition"
-               (cdkDragMoved)="pageNumberBoxMoved($event)">
-            {{currentPageNumber}}
-          </div>
-        </div>
-      </div>
+      <app-page-number-box [loaded]="loaded" [pageNumber]="currentPageNumber"></app-page-number-box>
 
       <div #viewerContainer id="viewerContainer" cdkScrollable [style.visibility]="loaded ? 'visible' : 'hidden'" (toggleFullScreen)="toggleFullScreen()"
            appQuranGestures (zoom)="zoom($event)" (endzoom)="endzoom($event)">
