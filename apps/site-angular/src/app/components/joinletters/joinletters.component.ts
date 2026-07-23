@@ -1,6 +1,11 @@
 import { Component, AfterViewInit, OnInit, HostListener, Input, ViewChild, ElementRef } from '@angular/core';
 import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
+import { MushafLayoutType } from '../../services/qurantext.service';
 import { commonModules } from '../../app.config';
+
+// Always shown inside AboutComponent, which is pinned to NewMadinah -- see
+// about.component.ts's ABOUT_MUSHAF_TYPE comment.
+const JOIN_LETTERS_MUSHAF_TYPE = MushafLayoutType.NewMadinah;
 
 
 
@@ -112,9 +117,9 @@ export class JoinLettersComponent implements OnInit, AfterViewInit {
     code = code + glyphName + "_(" + (leftatweel || 0) + "," + (righttatweel || 0) + ");";
     code = code + "endchar;";
 
-    var status = this.quranShaper.executeMetapost(code);
+    var status = this.quranShaper.executeMetapost(JOIN_LETTERS_MUSHAF_TYPE, code);
 
-    this.quranShaper.drawPathByName("testglyph", ctx);
+    this.quranShaper.drawPathByName(JOIN_LETTERS_MUSHAF_TYPE, "testglyph", ctx);
 
     /*
     var path = this.quranShaper.getPathByName("testglyph");

@@ -40,7 +40,6 @@ const INTERLINE_PT = 1800 * POINTS_PER_DESIGN_UNIT;
     '[class.newmadina]': 'mushafType == MushafLayoutTypeEnum.NewMadinah',
     '[class.indopak]': 'mushafType == MushafLayoutTypeEnum.IndoPak15Lines'
   },
-  providers: [WasmMushafService],
   imports: [...commonModules, RouterOutlet, RouterLink, MushafSidebarComponent, PageNumberBoxComponent]
 })
 export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> implements OnInit, AfterViewInit {
@@ -102,14 +101,28 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     this.quranService.promise.then(() => {
       this.ngZone.runOutsideAngular(async () => {
 
-        this.quranService.quranShaper.setScalePoint(this.fontScale);
-
         this.startCommonPostLoadFlow();
 
-        this.applyForceCtrl.valueChanges.subscribe(value => {
+        // Now that WasmMushafService is a shared singleton (see wasm-mushaf.
+        // service.ts), its promise is already resolved on every mushaf route
+        // after the first one visited in a session, so this .then() runs
+        // synchronously-ish instead of after several seconds of WASM
+        // loading. That exposes a latent race in the base class's initial
+        // scroll-subscription pass (startCommonPostLoadFlow's auditTime(0,
+        // animationFrameScheduler) + startWith(null) can fire before this
+        // freshly-mounted route's scroll container has settled, finding zero
+        // visible pages and leaving `loaded` false forever) that the old
+        // per-route instance's multi-second load time used to mask by
+        // accident. Retry once on the next frame as a safety net.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (!this.loaded) {
+            this.update();
+          }
+        }));
+
+        this.applyForceCtrl.valueChanges.subscribe(() => {
           this.ngZone.runOutsideAngular(() => {
-            this.quranService.applyForce = value;
-            this.buffer.reset();
+            this.markAllViewsStale();
             this.update();
           });
         });
@@ -128,12 +141,31 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
 
   }
 
-  protected onFontScaleChanged(): void {
-    this.quranService.quranShaper.setScalePoint(this.fontScale);
+  protected createPageView(pageElement: HTMLElement, index: number): PageView {
+    return new PageView(pageElement, index, this.quranService, this.mushafType, this.viewport);
   }
 
-  protected createPageView(pageElement: HTMLElement, index: number): PageView {
-    return new PageView(pageElement, index, this.quranService, this.viewport);
+  // buffer.reset() (the base class default) destroys every buffered page's
+  // canvas immediately, blanking the screen until the (now worker-round-
+  // tripped, so noticeably slower than before) re-render catches up.
+  // markStaleForRerender() instead keeps each page's current canvas on
+  // screen until its replacement is actually ready -- see page_view.ts.
+  private markAllViewsStale(): void {
+    for (const view of this.views) {
+      view.markStaleForRerender();
+    }
+  }
+
+  protected override resetBufferForTajweedColorChange(): void {
+    this.markAllViewsStale();
+  }
+
+  // No markAllViewsStale() here: fontSizeChanged() calls updateViewsGeometry()
+  // right after this, whose PageView.update() already promotes the current
+  // canvas to a stretched placeholder kept on screen until the replacement
+  // is ready -- the same zoomLayer mechanism pinch-zoom uses -- but only if
+  // the canvas hasn't already been torn down by a buffer reset first.
+  protected override resetBufferForFontScaleChange(): void {
   }
 
   protected updateViewsGeometry(duringZoom: boolean): void {
@@ -168,8 +200,29 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     this.views.forEach(a => a.update(this.viewport, this.viewport.hasRestrictedScaling, false));
   }
 
+  // The shared worker (wasm-mushaf.service.ts) can only run one
+  // shapeMushafPage() at a time. Unlike hbmedina's chunked, genuinely-
+  // interruptible DOM rendering -- which is why the shared scheduler in
+  // BaseMushafViewerComponent.renderView() is willing to start a second
+  // render while the first is merely "paused" -- a WASM render already in
+  // flight can't be interrupted, so letting the scheduler start an
+  // overlapping drawView() for a different page just queues another request
+  // behind the worker's single-threaded message queue. During a fast multi-
+  // page scroll that queue can fill up with pages already scrolled past,
+  // delaying the page actually landed on. Piggyback on whatever is already
+  // in flight instead; once it settles, the base class's own
+  // .finally(() => forceRendering(null)) re-evaluates priority fresh and
+  // this runs again for whatever is now actually current.
+  private inFlightDraw: Promise<any> | null = null;
+
   protected drawView(view: PageView, canvasWidth: number, canvasHeight: number): Promise<any> {
-    return view.draw(canvasWidth, canvasHeight, this.tajweedColorCtrl.value, this.viewport.hasRestrictedScaling);
+    if (this.inFlightDraw) {
+      return this.inFlightDraw;
+    }
+    const draw = view.draw(canvasWidth, canvasHeight, this.tajweedColorCtrl.value,
+      this.applyForceCtrl.value, this.fontScale, this.viewport.hasRestrictedScaling);
+    this.inFlightDraw = draw.finally(() => { this.inFlightDraw = null; });
+    return this.inFlightDraw;
   }
 
   protected computeOutlineY(outline): number {

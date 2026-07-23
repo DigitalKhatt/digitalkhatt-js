@@ -1,36 +1,10 @@
-import { Inject, Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {
-  MUSHAFLAYOUTTYPE, MushafLayoutType, NewMadinahQuranTextService,
+  MushafLayoutType, NewMadinahQuranTextService,
   OldMadinahQuranTextService, QuranTextIndopak15Service, QuranTextService
 } from '../../services/qurantext.service';
-
-const ASSET_ROOT = 'assets/wasm_masahif';
-// Bump when deploying a newly linked main/side-module set. Dynamic WASM
-// modules must not be mixed with an older cached main module because their
-// C++ runtime symbols and table entries form one ABI unit.
-const WASM_ASSET_VERSION = '20260722-42';
-
-const SHARED_FONT_FILES = [
-  'mfplain.mp',
-  'mpost.mp',
-  'vmf.mp',
-] as const;
-
-const FONT_CONFIG = {
-  [MushafLayoutType.NewMadinah]: { directory: 'madina', project: 'madina.mp', library: 'libmadina.wasm' },
-  [MushafLayoutType.OldMadinah]: { directory: 'oldmadina', project: 'oldmadina.mp', library: 'liboldmadina.wasm' },
-  [MushafLayoutType.IndoPak15Lines]: { directory: 'indopak', project: 'indopak.mp', library: 'libindopak.wasm' },
-} as const;
-
-const DIR_CONFIG = {
-  ["libmadina.wasm"]: "madina",
-  ["liboldmadina.wasm"]: "oldmadina",
-  ["libindopak.wasm"]: "indopak",
-
-} as const;
-
-const FONT_FILES = ['glyphs.mp', 'features.fea', 'parameters.json'] as const;
+import { loadWasmModuleWithAllFonts } from './wasm-mushaf-bootstrap';
 
 // Matches OtLayout::InterLineSpacing (design units) used by the C++ page
 // layout, and just.service.ts's INTERLINE constant used by the DOM-based
@@ -57,21 +31,46 @@ const TOP_SPACE_DESIGN_UNITS = 1130;
 const SAJDA_BAR_Y_OFFSET_DESIGN_UNITS = 1100;
 const SAJDA_BAR_THICKNESS_DESIGN_UNITS = 50;
 
-@Injectable()
+interface ShapedGlyph {
+  codepoint: number;
+  lefttatweel: number;
+  righttatweel: number;
+  x_advance: number;
+  x_offset: number;
+  y_offset: number;
+  cluster: number;
+  color: number;
+}
+
+interface ShapedLine {
+  type: number;
+  ystartposition: number;
+  xstartposition: number;
+  xscale: number;
+  fontSize: number;
+  glyphs: ShapedGlyph[];
+}
+
+// Shared by every mushaf-viewer route and the About/glyph-demo screens: one
+// module instance holding all three fonts (see wasm-mushaf-bootstrap.ts),
+// plus one dedicated Worker that runs shapeMushafPage() -- including the
+// "Optimize marks" physics solver, the dominant cost when that option is on
+// -- off the main thread. The worker only shapes; this service still does
+// all drawing (displayGlyph et al.) against its own instance of the same
+// fonts, since displayGlyph() is a pure function of its glyph-id/tatweel
+// arguments plus the loaded font and doesn't need to share state with
+// whichever instance did the shaping.
+@Injectable({ providedIn: 'root' })
 export class WasmMushafService implements OnDestroy {
-  readonly quranShaper = this;
   readonly promise: Promise<WasmMushafService>;
-  useJustification = true;
-  // Must match applyForceCtrl's initial unchecked state. valueChanges does
-  // not emit that initial value, and starting true blocks the first render
-  // in optimizeLayout() while the UI misleadingly shows optimization off.
-  applyForce = false;
 
   private module: any;
-  private otLayout: any;
-  private fontScale = 0.9;
-  private readonly fontConfig;
-  private readonly quranTextService: QuranTextService;
+  private otLayouts: Record<MushafLayoutType, any> = {} as any;
+  private readonly quranTextServices: Record<MushafLayoutType, QuranTextService> = {
+    [MushafLayoutType.NewMadinah]: NewMadinahQuranTextService,
+    [MushafLayoutType.OldMadinah]: OldMadinahQuranTextService,
+    [MushafLayoutType.IndoPak15Lines]: QuranTextIndopak15Service,
+  } as any;
   private readonly statusSubject = new BehaviorSubject({ error: null, message: '' });
   readonly statusObserver = this.statusSubject.asObservable();
   // Decorative sura-name frame, drawn around LineType.Sura lines the same
@@ -79,66 +78,30 @@ export class WasmMushafService implements OnDestroy {
   // Preloaded during initialize() so it is always ready by the first printPage().
   private ayaFrameImage: HTMLImageElement;
 
-  constructor(@Inject(MUSHAFLAYOUTTYPE) mushafType: MushafLayoutType) {
-    this.fontConfig = FONT_CONFIG[mushafType];
-    this.quranTextService = mushafType === MushafLayoutType.OldMadinah
-      ? OldMadinahQuranTextService
-      : mushafType === MushafLayoutType.IndoPak15Lines
-        ? QuranTextIndopak15Service : NewMadinahQuranTextService;
+  private worker: Worker;
+  private requestSeq = 0;
+  private readonly pendingRequests = new Map<number, {
+    resolve: (lines: ShapedLine[]) => void;
+    reject: (error: any) => void;
+  }>();
+
+  constructor() {
     this.promise = this.initialize();
   }
 
   private async initialize(): Promise<WasmMushafService> {
     try {
-      this.setStatus(null, 'Fetching/Compiling WebAssembly');
+      const workerReady = this.startWorker();
 
-      // Keep Emscripten's large generated loader as a deployable asset. It
-      // contains dynamic-linking code that should execute unchanged instead
-      // of being rewritten into Angular's application bundle.
-      const loaderUrl = `/${ASSET_ROOT}/VisualMetaFontWasm.js?v=${WASM_ASSET_VERSION}`;
-      const { default: createVisualMetaFontModule } = await import(
-        /* @vite-ignore */ /* webpackIgnore: true */ loaderUrl
-      );
+      const { module, otLayouts } = await loadWasmModuleWithAllFonts(
+        message => this.setStatus(null, message));
+      this.module = module;
+      this.otLayouts = otLayouts;
 
-      try {
-        this.module = await createVisualMetaFontModule({
-          locateFile: (path: string) => {
-            if (path === this.fontConfig.library) {
-              return `${ASSET_ROOT}/fonts/${this.fontConfig.directory}/${path}?v=${WASM_ASSET_VERSION}`;
-            } else if (DIR_CONFIG[path]) {
-              return `${ASSET_ROOT}/fonts/${DIR_CONFIG[path]}/${path}?v=${WASM_ASSET_VERSION}`;
-            }
-            const assetPath = path.startsWith('/') ? path : `${ASSET_ROOT}/${path}`;
-            return `${assetPath}?v=${WASM_ASSET_VERSION}`;
-          },
-          // Keep the loader's registry key equal to OtLayout.cpp's dlopen()
-          // basename while locateFile maps its HTTP request to the selected
-          // route's isolated asset directory.
-          dynamicLibraries: [this.fontConfig.library],
-          noInitialRun: true,
-        });
-      } catch (error) {
-        throw new Error(`WASM module loading: ${this.errorMessage(error)}`);
-      }
-
-      this.setStatus(null, 'Loading DigitalKhatt font');
-      await Promise.all(SHARED_FONT_FILES.map(name => this.copyAssetToFs(name, name)));
-      const fontDirectory = `fonts/${this.fontConfig.directory}`;
-      this.module.FS.mkdirTree(`/${fontDirectory}`);
-      await Promise.all([
-        this.copyAssetToFs(`${fontDirectory}/${this.fontConfig.project}`, `${fontDirectory}/${this.fontConfig.project}`),
-        ...FONT_FILES.map(name => this.copyAssetToFs(`${fontDirectory}/${name}`, `${fontDirectory}/${name}`)),
-      ]);
-
-      try {
-        this.otLayout = new this.module.OtLayoutMushaf(
-          `${fontDirectory}/${this.fontConfig.project}`);
-      } catch (error) {
-        const stage = this.module.getInitializationStage?.() || 'unknown stage';
-        throw new Error(`font initialization (${stage}): ${this.errorMessage(error)}`);
-      }
       this.setStatus(null, 'Loading page decorations');
       await this.loadAyaFrameImage();
+
+      await workerReady;
 
       this.setStatus(null, 'Ready');
       return this;
@@ -152,24 +115,62 @@ export class WasmMushafService implements OnDestroy {
     }
   }
 
+  private startWorker(): Promise<void> {
+    this.worker = new Worker(
+      new URL('./wasm-mushaf-shaping.worker', import.meta.url), { type: 'module' });
+
+    return new Promise((resolve, reject) => {
+      const onReadyOrError = (event: MessageEvent) => {
+        if (event.data?.type === 'ready') {
+          this.worker.removeEventListener('message', onReadyOrError);
+          this.worker.addEventListener('message', event => this.handleWorkerMessage(event));
+          resolve();
+        } else if (event.data?.type === 'error') {
+          this.worker.removeEventListener('message', onReadyOrError);
+          reject(new Error(event.data.message));
+        }
+      };
+      this.worker.addEventListener('message', onReadyOrError);
+    });
+  }
+
+  private handleWorkerMessage(event: MessageEvent): void {
+    const data = event.data;
+    const pending = this.pendingRequests.get(data.requestId);
+    if (!pending) return; // Superseded/stale response -- see requestShaping().
+    this.pendingRequests.delete(data.requestId);
+    if (data.type === 'shapePageResult') {
+      pending.resolve(data.lines);
+    } else {
+      pending.reject(new Error(data.message));
+    }
+  }
+
+  // A running shapeMushafPage() call in the worker can't be interrupted mid-
+  // flight any more than it could when it ran in-process (same reality noted
+  // by page_view.ts's PageView.draw() comment) -- so cancellation here just
+  // means "the caller stops waiting," not "the worker stops computing."
+  // printPage() re-checks its own token after this resolves and discards a
+  // stale result rather than drawing it.
+  private requestShaping(mushafType: MushafLayoutType, pageIndex: number, fontScale: number,
+    tajweedColor: boolean, applyForce: boolean, textLines: string[], widthRatios: number[],
+    lineTypes: number[]): Promise<ShapedLine[]> {
+    const requestId = ++this.requestSeq;
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(requestId, { resolve, reject });
+      this.worker.postMessage({
+        type: 'shapePage', requestId, mushafType, pageIndex, fontScale, tajweedColor, applyForce,
+        textLines, widthRatios, lineTypes,
+      });
+    });
+  }
+
   private errorMessage(error: any): string {
     if (this.module && error && typeof error.excPtr === 'number') {
       const details = this.module.getExceptionMessage(error);
       return Array.isArray(details) ? details.join(': ') : String(details);
     }
     return error?.message || String(error);
-  }
-
-  private async copyAssetToFs(assetPath: string, fsPath: string): Promise<void> {
-    const response = await fetch(`${ASSET_ROOT}/${assetPath}`);
-    if (!response.ok) {
-      throw new Error(`Unable to load ${assetPath}: HTTP ${response.status}`);
-    }
-    this.module.FS.writeFile(`/${fsPath}`, new Uint8Array(await response.arrayBuffer()));
-  }
-
-  private setStatus(error: any, message: string): void {
-    this.statusSubject.next({ error, message });
   }
 
   private loadAyaFrameImage(): Promise<void> {
@@ -182,6 +183,10 @@ export class WasmMushafService implements OnDestroy {
     });
   }
 
+  private setStatus(error: any, message: string): void {
+    this.statusSubject.next({ error, message });
+  }
+
   // Draws the decorative sura-name frame around a LineType.Sura line,
   // mirroring hbmedina's `.linesuran` CSS (background: ayaframe.svg;
   // background-size: contain; background-position: top). `outerTransform`
@@ -190,11 +195,10 @@ export class WasmMushafService implements OnDestroy {
   // than the flipped/rotated coordinate space glyph paths are drawn in
   // (drawImage does not self-correct for that flip the way path fills do).
   private drawSurahFrame(ctx: CanvasRenderingContext2D, outerTransform: DOMMatrix,
-    pageWidth: number, margin: number, ystartposition: number): void {
+    pageWidth: number, margin: number, ystartposition: number, scaleBy: number): void {
     const img = this.ayaFrameImage;
     if (!img?.naturalWidth) return;
 
-    const scaleBy = this.otLayout.scaleBy();
     const interLine = INTERLINE_DESIGN_UNITS << scaleBy;
     // Top of this line's box, not ystartposition itself -- see
     // TOP_SPACE_DESIGN_UNITS above.
@@ -251,8 +255,7 @@ export class WasmMushafService implements OnDestroy {
   // in printPage() below, so they're already in outerTransform's design space
   // -- same treatment as drawSurahFrame above.
   private drawSajdaBar(ctx: CanvasRenderingContext2D, outerTransform: DOMMatrix,
-    startX: number, endX: number, ystartposition: number): void {
-    const scaleBy = this.otLayout.scaleBy();
+    startX: number, endX: number, ystartposition: number, scaleBy: number): void {
     const y = ystartposition - (SAJDA_BAR_Y_OFFSET_DESIGN_UNITS << scaleBy);
 
     const p1 = new DOMPoint(startX, y).matrixTransform(outerTransform);
@@ -273,17 +276,18 @@ export class WasmMushafService implements OnDestroy {
     ctx.restore();
   }
 
-  executeMetapost(code: string): number {
-    return this.otLayout.executeMetapost(code);
+  executeMetapost(mushafType: MushafLayoutType, code: string): number {
+    return this.otLayouts[mushafType].executeMetapost(code);
   }
 
-  drawPathByName(name: string, ctx: CanvasRenderingContext2D): void {
-    this.otLayout.drawPathByName(name, ctx);
+  drawPathByName(mushafType: MushafLayoutType, name: string, ctx: CanvasRenderingContext2D): void {
+    this.otLayouts[mushafType].drawPathByName(name, ctx);
   }
 
-  shapeText(text: string, lineWidth: number, fontScalePerc: number, applyJustification: boolean,
-      tajweedColor: boolean, ctx: CanvasRenderingContext2D): number {
-    return this.otLayout.shapeText(text, lineWidth, fontScalePerc, applyJustification, tajweedColor, false, ctx);
+  shapeText(mushafType: MushafLayoutType, text: string, lineWidth: number, fontScalePerc: number,
+    applyJustification: boolean, tajweedColor: boolean, ctx: CanvasRenderingContext2D): number {
+    return this.otLayouts[mushafType].shapeText(
+      text, lineWidth, fontScalePerc, applyJustification, tajweedColor, false, ctx);
   }
 
   getOutputScale(ctx: any): { sx: number; sy: number; scaled: boolean } {
@@ -298,53 +302,47 @@ export class WasmMushafService implements OnDestroy {
     return { sx: pixelRatio, sy: pixelRatio, scaled: pixelRatio !== 1 };
   }
 
-  setScalePoint(percent: number): void {
-    this.fontScale = percent;
-  }
-
-  async printPage(pageIndex: number, ctx: CanvasRenderingContext2D, token: any,
-    tajweedColor: boolean): Promise<void> {
+  async printPage(mushafType: MushafLayoutType, pageIndex: number, ctx: CanvasRenderingContext2D,
+    token: any, tajweedColor: boolean, applyForce: boolean, fontScale: number): Promise<void> {
     if (token.isCancelled()) return;
 
-    const textLines = new this.module.VectorString();
-    const widthRatios = new this.module.VectorDouble();
-    const lineTypes = new this.module.VectorInt();
-    const pageText = this.quranTextService.quranText[pageIndex];
+    const quranTextService = this.quranTextServices[mushafType];
+    const pageText = quranTextService.quranText[pageIndex];
     const lineInfos = [];
+    const textLines: string[] = [];
+    const widthRatios: number[] = [];
+    const lineTypes: number[] = [];
     for (let lineIndex = 0; lineIndex < pageText.length; ++lineIndex) {
-      const lineInfo = this.quranTextService.getLineInfo(pageIndex, lineIndex);
+      const lineInfo = quranTextService.getLineInfo(pageIndex, lineIndex);
       lineInfos.push(lineInfo);
-      textLines.push_back(pageText[lineIndex]);
-      widthRatios.push_back(lineInfo.lineWidthRatio);
-      lineTypes.push_back(lineInfo.lineType);
+      textLines.push(pageText[lineIndex]);
+      widthRatios.push(lineInfo.lineWidthRatio);
+      lineTypes.push(lineInfo.lineType);
     }
 
-    const result = this.otLayout.shapeMushafPage(
-      pageIndex, this.fontScale, tajweedColor, this.applyForce,
-      textLines, widthRatios, lineTypes);
-    textLines.delete();
-    widthRatios.delete();
-    lineTypes.delete();
-    const page = result.page;
-    const scaleBy = this.otLayout.scaleBy();
+    const lines = await this.requestShaping(
+      mushafType, pageIndex, fontScale, tajweedColor, applyForce, textLines, widthRatios, lineTypes);
+
+    if (token.isCancelled()) return;
+
+    const otLayout = this.otLayouts[mushafType];
+    const scaleBy = otLayout.scaleBy();
     // Same fixed page-space transform used by QuranPdfWriterPdfHummus;
     // line.fontSize already contains the requested font scale.
     const designScale = 72 / (4800 << scaleBy);
-    const pageWidth = this.otLayout.mushafPageWidth();
+    const pageWidth = otLayout.mushafPageWidth();
     const margin = 400 << scaleBy;
 
     ctx.save();
     ctx.transform(designScale, 0, 0, -designScale, 0, 410);
     const outerTransform = ctx.getTransform();
 
-    for (let lineIndex = 0; lineIndex < page.size(); ++lineIndex) {
+    for (let lineIndex = 0; lineIndex < lines.length; ++lineIndex) {
       if (token.isCancelled()) break;
-      const line = page.get(lineIndex);
+      const line = lines[lineIndex];
 
-      // line.type is an embind enum_<LineType> instance, not a raw number;
-      // its numeric value lives on .value (LineType::Sura == 1).
-      if (line.type?.value === 1 /* LineType::Sura */) {
-        this.drawSurahFrame(ctx, outerTransform, pageWidth, margin, line.ystartposition);
+      if (line.type === 1 /* LineType::Sura */) {
+        this.drawSurahFrame(ctx, outerTransform, pageWidth, margin, line.ystartposition, scaleBy);
       }
 
       const glyphs = line.glyphs;
@@ -363,8 +361,8 @@ export class WasmMushafService implements OnDestroy {
       let startSajdaX: number | undefined;
       let endSajdaX: number | undefined;
 
-      for (let glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
-        const glyph = glyphs.get(glyphIndex);
+      for (let glyphIndex = 0; glyphIndex < glyphs.length; ++glyphIndex) {
+        const glyph = glyphs[glyphIndex];
         const glyphEntryX = currentX;
         currentX -= glyph.x_advance;
         const x = currentX + glyph.x_offset;
@@ -386,13 +384,11 @@ export class WasmMushafService implements OnDestroy {
         // translate + save/scale/restore trio.
         const localX = lineOriginX + line.xscale * x;
         ctx.setTransform(outerTransform.translate(localX, y).scale(line.xscale * line.fontSize, -line.fontSize));
-        this.otLayout.displayGlyph(glyph.codepoint, glyph.lefttatweel,
-          glyph.righttatweel, ctx);
+        otLayout.displayGlyph(glyph.codepoint, glyph.lefttatweel, glyph.righttatweel, ctx);
 
         if (glyph.color) ctx.fillStyle = 'rgb(0,0,0)';
       }
       ctx.setTransform(outerTransform);
-      glyphs.delete?.();
 
       if (startSajdaX !== undefined && endSajdaX !== undefined) {
         // startSajdaX/endSajdaX are relative to lineOriginX (currentX starts
@@ -402,19 +398,19 @@ export class WasmMushafService implements OnDestroy {
         this.drawSajdaBar(ctx, outerTransform,
           lineOriginX + line.xscale * startSajdaX,
           lineOriginX + line.xscale * endSajdaX,
-          lineOriginY);
+          lineOriginY, scaleBy);
       }
     }
 
     ctx.restore();
-    this.otLayout.clearAlternates();
-    page.delete?.();
-    result.originalPage?.delete?.();
-    result.delete?.();
+    otLayout.clearAlternates();
   }
 
   ngOnDestroy(): void {
-    this.otLayout?.delete?.();
+    for (const otLayout of Object.values(this.otLayouts)) {
+      (otLayout as any)?.delete?.();
+    }
+    this.worker?.terminate();
     this.statusSubject.complete();
   }
 }

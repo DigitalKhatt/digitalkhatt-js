@@ -1,10 +1,17 @@
 import { Component, AfterViewInit, OnInit, HostListener } from '@angular/core';
 import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
+import { MushafLayoutType } from '../../services/qurantext.service';
 import { Title } from '@angular/platform-browser';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { commonModules } from '../../app.config';
 import { DynamicTextComponent } from '../dynamictext/dynamictext.component';
 import { JoinLettersComponent } from '../joinletters/joinletters.component';
+
+// The glyph gallery below is hardcoded to madina-font glyph names
+// (behshape.isol.expa etc.) regardless of which mushaf route opened this
+// dialog, so it always uses NewMadinah -- unrelated to whatever font the
+// underlying viewer (if any) is currently showing.
+const ABOUT_MUSHAF_TYPE = MushafLayoutType.NewMadinah;
 
 const CSS_UNITS = 96.0 / 72.0;
 
@@ -12,8 +19,7 @@ const CSS_UNITS = 96.0 / 72.0;
   selector: 'app-about-component',
   templateUrl: './about.component.html',
   styleUrls: ['./about.component.scss'],
-  imports: [...commonModules, DynamicTextComponent, JoinLettersComponent, RouterLink],
-  providers: [WasmMushafService]
+  imports: [...commonModules, DynamicTextComponent, JoinLettersComponent, RouterLink]
 })
 export class AboutComponent implements OnInit, AfterViewInit {
   quranShaper: WasmMushafService;
@@ -150,9 +156,9 @@ export class AboutComponent implements OnInit, AfterViewInit {
     code = code + glyphName + "_(" + (leftatweel || 0) + "," + (righttatweel || 0) + ");";
     code = code + "endchar;";
 
-    var status = this.quranShaper.executeMetapost(code);
+    var status = this.quranShaper.executeMetapost(ABOUT_MUSHAF_TYPE, code);
 
-    this.quranShaper.drawPathByName("testglyph", ctx);
+    this.quranShaper.drawPathByName(ABOUT_MUSHAF_TYPE, "testglyph", ctx);
 
     /*
     var path = this.quranShaper.getPathByName("testglyph");

@@ -1,8 +1,12 @@
 import { Component, AfterViewInit, OnInit, HostListener, Input, ViewChild, ElementRef, OnChanges, SimpleChanges } from '@angular/core';
 import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
+import { MushafLayoutType } from '../../services/qurantext.service';
 import { commonModules } from '../../app.config';
 
 const CSS_UNITS = 96.0 / 72.0;
+// Always shown inside AboutComponent, which is pinned to NewMadinah -- see
+// about.component.ts's ABOUT_MUSHAF_TYPE comment.
+const DYNAMIC_TEXT_MUSHAF_TYPE = MushafLayoutType.NewMadinah;
 
 @Component({
     selector: 'quran-dynamictext',
@@ -67,7 +71,7 @@ export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
     let ctx = this.ctx;
     let canvas = this.ctx.canvas;
 
-    this.width = this.quranShaper.shapeText(this.text, 0, 1, false, false, ctx);
+    this.width = this.quranShaper.shapeText(DYNAMIC_TEXT_MUSHAF_TYPE, this.text, 0, 1, false, false, ctx);
 
 
 
@@ -107,7 +111,7 @@ export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
 
     if (width < 1) width = 1;
 
-    this.quranShaper.shapeText(this.text, width, 1, true, true, this.ctx);
+    this.quranShaper.shapeText(DYNAMIC_TEXT_MUSHAF_TYPE, this.text, width, 1, true, true, this.ctx);
 
     this.drawLine();
 

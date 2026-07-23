@@ -318,7 +318,7 @@ export abstract class BaseMushafViewerComponent<TView extends MushafPageView> im
 
     this.tajweedColorCtrl.valueChanges.subscribe(() => {
       this.ngZone.runOutsideAngular(() => {
-        this.buffer.reset();
+        this.resetBufferForTajweedColorChange();
         this.update();
       });
     });
@@ -347,10 +347,23 @@ export abstract class BaseMushafViewerComponent<TView extends MushafPageView> im
     this.onFontScaleChanged();
     this.ngZone.runOutsideAngular(() => {
       this.setViewport(this.scale, false, false);
-      this.buffer.reset();
+      this.resetBufferForFontScaleChange();
       this.updateViewsGeometry(false);
       this.update();
     });
+  }
+
+  // Hooks for a setting change that forces every buffered page to reshape.
+  // Default: evict/destroy each buffered page's canvas immediately, exactly
+  // as before. A subclass whose renderer can produce a smoother transition
+  // (e.g. keeping the previous render visible until the replacement is
+  // ready, rather than a blank gap) may override these instead.
+  protected resetBufferForTajweedColorChange(): void {
+    this.buffer.reset();
+  }
+
+  protected resetBufferForFontScaleChange(): void {
+    this.buffer.reset();
   }
   formatLabel(value: number) {
 

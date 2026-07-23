@@ -1,10 +1,17 @@
 import { RenderingStates } from '../mushaf-viewer/rendering_states';
 import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
+import { MushafLayoutType } from '../../services/qurantext.service';
 
 class PageView {
   renderingState: RenderingStates;
   private viewport;
   private canvas;
+  // A previous, already-visible canvas kept on screen (instead of reset()'s
+  // immediate teardown) while a page setting like "Optimize marks" that
+  // affects every page is toggled -- see markStaleForRerender(). draw() swaps
+  // it out for the freshly rendered replacement only once that's ready,
+  // avoiding a blank flash in between.
+  private staleCanvas;
   private loadingIconDiv;
   private paintTask;
   id;
@@ -14,7 +21,8 @@ class PageView {
   zoomLayer;
   hasRestrictedScaling;
 
-  constructor(public div, private pageIndex, private quranService: WasmMushafService, viewport) {
+  constructor(public div, private pageIndex, private quranService: WasmMushafService,
+    private mushafType: MushafLayoutType, viewport) {
     this.renderingState = RenderingStates.INITIAL;
 
     this.id = pageIndex + 1;
@@ -54,7 +62,31 @@ class PageView {
     this.loadingIconDiv?.classList.toggle("notVisible", !viewVisible);
   }
 
-  async draw(canvasWidth, canvasHeight, tajweedColor, hasRestrictedScaling) {
+  // Used when a setting that affects every page (e.g. "Optimize marks") is
+  // toggled: unlike reset(), this does NOT tear down the DOM immediately, so
+  // whatever is currently on screen keeps showing until draw() has a
+  // freshly-rendered replacement ready to reveal -- an abrupt blank-then-
+  // repaint reads as broken once each re-render round-trips through the
+  // shaping worker instead of finishing synchronously.
+  markStaleForRerender() {
+    if (this.renderingState === RenderingStates.INITIAL) {
+      return;
+    }
+    if (this.paintTask) {
+      this.paintTask.cancel();
+      this.paintTask = null;
+    }
+    this.renderingState = RenderingStates.INITIAL;
+    if (this.resume) {
+      this.resume();
+    }
+    if (this.canvas) {
+      this.staleCanvas = this.canvas;
+      this.canvas = null;
+    }
+  }
+
+  async draw(canvasWidth, canvasHeight, tajweedColor, applyForce, fontScale, hasRestrictedScaling) {
 
     if (this.renderingState !== RenderingStates.INITIAL) {
       return Promise.resolve();
@@ -109,7 +141,8 @@ class PageView {
 
     this.hasRestrictedScaling = hasRestrictedScaling;
 
-    await this.quranService.printPage(this.pageIndex, ctx, token, tajweedColor);
+    await this.quranService.printPage(
+      this.mushafType, this.pageIndex, ctx, token, tajweedColor, applyForce, fontScale);
 
     // Only cancellation withholds the result: the WASM call itself can't be
     // interrupted mid-flight the way hbmedina's chunked DOM rendering can, so
@@ -119,11 +152,24 @@ class PageView {
     if (!token.isCancelled()) {
       this.renderingState = RenderingStates.FINISHED;
       showCanvas();
+      if (this.staleCanvas) {
+        this.staleCanvas.width = 0;
+        this.staleCanvas.height = 0;
+        this.staleCanvas.remove();
+        this.staleCanvas = null;
+      }
       if (this.loadingIconDiv) {
         this.div.removeChild(this.loadingIconDiv);
         delete this.loadingIconDiv;
       }
       this.resetZoomLayer(/* removeFromDOM = */ true);
+    } else if (this.staleCanvas) {
+      // Cancelled before the replacement could be revealed (e.g. evicted or
+      // re-marked stale again mid-flight) -- discard the abandoned new
+      // canvas and keep showing the stale one rather than losing it.
+      this.canvas?.remove();
+      this.canvas = this.staleCanvas;
+      this.staleCanvas = null;
     }
     if (token === this.paintTask) {
       this.paintTask = null;
@@ -167,6 +213,14 @@ class PageView {
         delete this.canvas;
       }
       this.resetZoomLayer();
+    }
+
+    // Already removed from the DOM by the childNodes loop above if present;
+    // just release the reference and its backing store, matching this.canvas.
+    if (this.staleCanvas) {
+      this.staleCanvas.width = 0;
+      this.staleCanvas.height = 0;
+      this.staleCanvas = null;
     }
 
     this.loadingIconDiv = document.createElement('div');
