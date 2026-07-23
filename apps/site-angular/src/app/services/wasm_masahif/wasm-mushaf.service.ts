@@ -46,6 +46,17 @@ const INTERLINE_DESIGN_UNITS = 1800;
 // top, i.e. ystartposition[0] - TopSpace == 0, not ystartposition[0] itself.
 const TOP_SPACE_DESIGN_UNITS = 1130;
 
+// Matches QuranPdfWriterPdfHummus::drawSajdaRule (visualmetafont/src/Pdf/
+// quranpdfwriterpdfhummus.cpp), the Qt-free PDF writer this WASM path was
+// ported from: same GlyphLayoutInfo.beginsajda/endsajda fields, same
+// currentxPos/currentyPos bookkeeping, and the same page-level
+// `cm(scale, 0, 0, -scale, 0, pageHeight)` CTM as printPage()'s own
+// designScale transform below -- so the bar sits at endY - (1100<<scaleBy)
+// with no extra sign correction, unlike hbmedina's SVG path which uses an
+// unrelated font-outline unit space (1200/60) rather than this design-unit one.
+const SAJDA_BAR_Y_OFFSET_DESIGN_UNITS = 1100;
+const SAJDA_BAR_THICKNESS_DESIGN_UNITS = 50;
+
 @Injectable()
 export class WasmMushafService implements OnDestroy {
   readonly quranShaper = this;
@@ -211,6 +222,57 @@ export class WasmMushafService implements OnDestroy {
     ctx.restore();
   }
 
+  // GlyphLayoutInfo.beginsajda/endsajda (set by quranshaper.h's QuranShaper::
+  // shapePage) are never populated on the OtLayoutMushaf::shapeMushafPage path
+  // this canvas renderer uses. Instead locate the sajda word span the same
+  // way hbmedina/page_view.ts does: QuranTextService already ran the sajda
+  // regex per-line and stored word indices, so split the line text on spaces
+  // (matching qurantext.service.ts's own word-index counting) to get the
+  // start/end character (cluster) index of the marked phrase.
+  private getSajdaClusterRange(lineText: string, sajda: { startWordIndex: number; endWordIndex: number })
+    : { start: number; end: number } {
+    const wordBounds: { start: number; end: number }[] = [];
+    let wordStart = 0;
+    for (let i = 0; i <= lineText.length; i++) {
+      if (i === lineText.length || lineText[i] === ' ') {
+        wordBounds.push({ start: wordStart, end: i - 1 });
+        wordStart = i + 1;
+      }
+    }
+    return {
+      start: wordBounds[sajda.startWordIndex].start,
+      end: wordBounds[sajda.endWordIndex].end,
+    };
+  }
+
+  // Draws the horizontal sajda-verse rule, mirroring hbmedina's per-line SVG
+  // <line> overlay and QuranPdfWriterPdfHummus::drawSajdaRule. `startX`/`endX`
+  // are the same currentX pen-position values tracked while placing glyphs
+  // in printPage() below, so they're already in outerTransform's design space
+  // -- same treatment as drawSurahFrame above.
+  private drawSajdaBar(ctx: CanvasRenderingContext2D, outerTransform: DOMMatrix,
+    startX: number, endX: number, ystartposition: number): void {
+    const scaleBy = this.otLayout.scaleBy();
+    const y = ystartposition - (SAJDA_BAR_Y_OFFSET_DESIGN_UNITS << scaleBy);
+
+    const p1 = new DOMPoint(startX, y).matrixTransform(outerTransform);
+    const p2 = new DOMPoint(endX, y).matrixTransform(outerTransform);
+    // Thickness only needs to travel through outerTransform's scale, not its
+    // translation, so measure it as a vector rather than transforming a point.
+    const thicknessVector = new DOMPoint(0, SAJDA_BAR_THICKNESS_DESIGN_UNITS << scaleBy)
+      .matrixTransform(new DOMMatrix([outerTransform.a, outerTransform.b, outerTransform.c, outerTransform.d, 0, 0]));
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = Math.hypot(thicknessVector.x, thicknessVector.y);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   getOutputScale(ctx: any): { sx: number; sy: number; scaled: boolean } {
     const devicePixelRatio = window.devicePixelRatio || 1;
     const backingStoreRatio = ctx.webkitBackingStorePixelRatio
@@ -235,8 +297,10 @@ export class WasmMushafService implements OnDestroy {
     const widthRatios = new this.module.VectorDouble();
     const lineTypes = new this.module.VectorInt();
     const pageText = this.quranTextService.quranText[pageIndex];
+    const lineInfos = [];
     for (let lineIndex = 0; lineIndex < pageText.length; ++lineIndex) {
       const lineInfo = this.quranTextService.getLineInfo(pageIndex, lineIndex);
+      lineInfos.push(lineInfo);
       textLines.push_back(pageText[lineIndex]);
       widthRatios.push_back(lineInfo.lineWidthRatio);
       lineTypes.push_back(lineInfo.lineType);
@@ -271,34 +335,62 @@ export class WasmMushafService implements OnDestroy {
       }
 
       const glyphs = line.glyphs;
-      let currentX = pageWidth + margin - line.xstartposition;
-      const currentY = line.ystartposition;
-      let lastX = currentX;
-      let lastY = currentY;
+      const lineOriginX = pageWidth + margin - line.xstartposition;
+      const lineOriginY = line.ystartposition;
+      let currentX = 0;
 
-      ctx.save();
-      ctx.transform(1, 0, 0, -1, currentX, currentY);
+      // Mirrors QuranPdfWriterPdfHummus's beginsajda/endsajda tracking: the
+      // rule spans from the pen position entering the first sajda glyph
+      // (before this glyph's own advance/offset) to the position exiting
+      // the last sajda glyph (after its advance). The begin/end cluster
+      // indexes come from QuranTextService (see getSajdaClusterRange
+      // above), not GlyphLayoutInfo.beginsajda/endsajda.
+      const sajda = lineInfos[lineIndex].sajda;
+      const sajdaRange = sajda ? this.getSajdaClusterRange(pageText[lineIndex], sajda) : undefined;
+      let startSajdaX: number | undefined;
+      let endSajdaX: number | undefined;
+
       for (let glyphIndex = 0; glyphIndex < glyphs.size(); ++glyphIndex) {
         const glyph = glyphs.get(glyphIndex);
+        const glyphEntryX = currentX;
         currentX -= glyph.x_advance;
         const x = currentX + glyph.x_offset;
-        const y = currentY - glyph.y_offset;
-        ctx.translate(x - lastX, -(y - lastY));
-        lastX = x;
-        lastY = y;
+        const y = lineOriginY - glyph.y_offset;
+
+        if (sajdaRange) {
+          if (glyph.cluster === sajdaRange.start && startSajdaX === undefined) startSajdaX = glyphEntryX;
+          if (glyph.cluster === sajdaRange.end && endSajdaX === undefined) endSajdaX = currentX;
+        }
 
         if (glyph.color) {
           ctx.fillStyle = `rgb(${(glyph.color >> 24) & 255},${(glyph.color >> 16) & 255},${(glyph.color >> 8) & 255})`;
         }
-        ctx.save();
-        ctx.scale(line.fontSize, line.fontSize);
+
+        // Absolute per-glyph placement -- everything is computed straight
+        // from the line's fixed origin (lineOriginX/lineOriginY) and this
+        // glyph's own x/y, so there's no lastX/lastY delta to carry across
+        // iterations, and a single setTransform replaces the previous
+        // translate + save/scale/restore trio.
+        const localX = lineOriginX + line.xscale * x;
+        ctx.setTransform(outerTransform.translate(localX, y).scale(line.xscale * line.fontSize, -line.fontSize));
         this.otLayout.displayGlyph(glyph.codepoint, glyph.lefttatweel,
           glyph.righttatweel, ctx);
-        ctx.restore();
+
         if (glyph.color) ctx.fillStyle = 'rgb(0,0,0)';
       }
-      ctx.restore();
+      ctx.setTransform(outerTransform);
       glyphs.delete?.();
+
+      if (startSajdaX !== undefined && endSajdaX !== undefined) {
+        // startSajdaX/endSajdaX are relative to lineOriginX (currentX starts
+        // at 0 above), so bring them through the same lineOriginX + xscale*x
+        // mapping used for glyph placement to get back to outerTransform's
+        // absolute design space.
+        this.drawSajdaBar(ctx, outerTransform,
+          lineOriginX + line.xscale * startSajdaX,
+          lineOriginX + line.xscale * endSajdaX,
+          lineOriginY);
+      }
     }
 
     ctx.restore();
