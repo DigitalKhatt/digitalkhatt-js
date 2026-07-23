@@ -26,7 +26,6 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { BrowserModule, bootstrapApplication } from '@angular/platform-browser';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { ExtraOptions, RouteReuseStrategy, RouterOutlet, provideRouter, withInMemoryScrolling } from '@angular/router';
-import { ServiceWorkerModule } from '@angular/service-worker';
 import { AppComponent } from './app/app.component';
 import { svgIconProviders } from './app/app.module';
 import { routes } from './app/app.routes';
@@ -59,8 +58,7 @@ bootstrapApplication(AppComponent, {
   providers: [
     importProvidersFrom(FormsModule, ReactiveFormsModule, ScrollingModule, DragDropModule, MatToolbarModule, MatButtonModule, MatSliderModule,
       MatCardModule, MatIconModule, MatSidenavModule, PortalModule, MatSlideToggleModule, MatInputModule, MatAutocompleteModule, MatDividerModule,
-      MatSelectModule, MatRadioModule, MatCheckboxModule, MatDialogModule, MatMenuModule, MatSnackBarModule, MatInputModule, MatFormFieldModule,      
-      ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production })),
+      MatSelectModule, MatRadioModule, MatCheckboxModule, MatDialogModule, MatMenuModule, MatSnackBarModule, MatInputModule, MatFormFieldModule),
     LayoutService,
     { provide: MatIconRegistry, useClass: CustomIconRegistry },
     svgIconProviders,

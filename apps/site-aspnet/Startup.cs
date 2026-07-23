@@ -46,6 +46,28 @@ namespace DigitalKhatt
         app.UseHsts();
       }
 
+      app.Use(async (context, next) =>
+      {
+        var path = context.Request.Path;
+
+        if (path.Equals("/ngsw.json", StringComparison.OrdinalIgnoreCase))
+        {
+          context.Response.Headers["Cache-Control"] = "no-store";
+          context.Response.StatusCode = 404;
+          return;
+        }
+
+        if (path.Equals("/ngsw-worker.js", StringComparison.OrdinalIgnoreCase))
+        {
+          context.Response.Headers["Cache-Control"] = "no-store";
+          context.Response.ContentType = "application/javascript";
+          await context.Response.WriteAsync(NgswSafetyNet.SafetyWorkerScript);
+          return;
+        }
+
+        await next.Invoke();
+      });
+
       var provider = new FileExtensionContentTypeProvider();
       // Add new mappings           
       provider.Mappings[".mp"] = "text/plain";
@@ -68,25 +90,6 @@ namespace DigitalKhatt
       });
 
       app.UseRouting();
-
-      /*
-      app.Use(async (context, next) =>
-      {
-        var logger = context.RequestServices.GetService<ILogger<Program>>();
-
-        //logger.LogInformation($"context.Request.Path={context.Request.Path}");
-        if (context.Request.Path.Value.Contains("ngsw.json"))
-        {
-          logger.LogWarning("ngsw.json returns 404");
-          context.Response.StatusCode = 404;
-        }
-        else
-        {
-          await next.Invoke();
-        }
-
-      });*/
-
 
       app.UseSpa(spa =>
       {
