@@ -1,4 +1,4 @@
-import { RenderingStates } from './rendering_states';
+import { RenderingStates } from '../mushaf-viewer/rendering_states';
 import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
 
 class PageView {

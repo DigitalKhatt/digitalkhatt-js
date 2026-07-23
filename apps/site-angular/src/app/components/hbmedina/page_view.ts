@@ -4,10 +4,10 @@
 import { MushafLayoutType, QuranTextService } from "../../services/qurantext.service";
 import { TajweedService } from "../../services/tajweed.service";
 import { HBFeature, hb as HarfBuzz, HarfBuzzBuffer, HarfBuzzFont, getWidth, harfbuzzFonts } from "./harfbuzz";
-import { PageFormat } from './hbmedina.component';
+import { PageFormat } from '../mushaf-viewer/base-mushaf-viewer.component';
 import { FONTSIZE, INTERLINE, JustResultByLine, JustStyle, LineTextInfo, MARGIN, PAGE_WIDTH, SpaceType, analyzeLineForJust, justifyLine } from './just.service';
 
-import { RenderingStates } from './rendering_states';
+import { RenderingStates } from '../mushaf-viewer/rendering_states';
 
 
 class PageView {

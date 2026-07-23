@@ -59,10 +59,10 @@
     <div class="rightnav">
       <form style="color:black;display: flex;flex-direction: row;align-items: center;">
 
-        <button *ngIf="debug" mat-icon-button [matMenuTriggerFor]="menu" title="Format">
+        <button mat-icon-button [matMenuTriggerFor]="menu" title="Format">
           <mat-icon>text_format</mat-icon>
         </button>
-        <mat-menu *ngIf="debug" #menu="matMenu" class="panelClass">
+        <mat-menu #menu="matMenu" class="panelClass">
           <div mat-menu-item>
             <mat-icon>invert_colors</mat-icon>
             <mat-slide-toggle [formControl]="tajweedColorCtrl">Tajweed Color</mat-slide-toggle>

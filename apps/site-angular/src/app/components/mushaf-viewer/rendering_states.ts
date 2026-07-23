@@ -6,5 +6,5 @@ enum RenderingStates {
 };
 
 export {
-  RenderingStates,  
+  RenderingStates,
 };
