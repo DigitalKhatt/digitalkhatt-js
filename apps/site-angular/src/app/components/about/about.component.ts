@@ -1,6 +1,5 @@
 import { Component, AfterViewInit, OnInit, HostListener } from '@angular/core';
-import { QuranService } from '../../services/quranservice/quranservice.service';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
+import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
 import { Title } from '@angular/platform-browser';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { commonModules } from '../../app.config';
@@ -13,10 +12,11 @@ const CSS_UNITS = 96.0 / 72.0;
   selector: 'app-about-component',
   templateUrl: './about.component.html',
   styleUrls: ['./about.component.scss'],
-  imports: [...commonModules, DynamicTextComponent, JoinLettersComponent, RouterLink]
+  imports: [...commonModules, DynamicTextComponent, JoinLettersComponent, RouterLink],
+  providers: [WasmMushafService]
 })
 export class AboutComponent implements OnInit, AfterViewInit {
-  quranShaper: QuranShaper;
+  quranShaper: WasmMushafService;
   contexts;
   tatweel;
   loaded;
@@ -28,7 +28,7 @@ export class AboutComponent implements OnInit, AfterViewInit {
   pageSize = { width: 255, height: 410 };
 
   constructor(
-    private quranService: QuranService, private titleService: Title, private router: Router
+    private quranService: WasmMushafService, private titleService: Title, private router: Router
   ) {
 
     this.contexts = []
@@ -58,7 +58,7 @@ export class AboutComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit() {
 
-    this.quranService.promise.then((respone: QuranShaper) => {
+    this.quranService.promise.then((respone: WasmMushafService) => {
       this.quranShaper = respone;
 
       this.initCanavas();

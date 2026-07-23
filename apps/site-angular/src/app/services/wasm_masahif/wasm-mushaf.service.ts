@@ -273,6 +273,19 @@ export class WasmMushafService implements OnDestroy {
     ctx.restore();
   }
 
+  executeMetapost(code: string): number {
+    return this.otLayout.executeMetapost(code);
+  }
+
+  drawPathByName(name: string, ctx: CanvasRenderingContext2D): void {
+    this.otLayout.drawPathByName(name, ctx);
+  }
+
+  shapeText(text: string, lineWidth: number, fontScalePerc: number, applyJustification: boolean,
+      tajweedColor: boolean, ctx: CanvasRenderingContext2D): number {
+    return this.otLayout.shapeText(text, lineWidth, fontScalePerc, applyJustification, tajweedColor, false, ctx);
+  }
+
   getOutputScale(ctx: any): { sx: number; sy: number; scaled: boolean } {
     const devicePixelRatio = window.devicePixelRatio || 1;
     const backingStoreRatio = ctx.webkitBackingStorePixelRatio

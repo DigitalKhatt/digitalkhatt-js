@@ -1,6 +1,4 @@
 import { Component, AfterViewInit, OnInit, ViewChildren, QueryList, ElementRef} from '@angular/core';
-import { QuranService } from '../../services/quranservice/quranservice.service';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
 
 
 
@@ -8,17 +6,15 @@ import { QuranShaper } from '../../services/quranservice/quran_shaper';
     selector: 'quran-pages',
     templateUrl: './pages.component.ts.html',
     styleUrls: ['./pages.component.ts.scss'],
-    host: { 'class': 'digitalkhatt' }    
+    host: { 'class': 'digitalkhatt' }
 })
 export class QuranPagesComponent implements OnInit, AfterViewInit {
-  
+
 
   @ViewChildren('page') pageElements: QueryList<ElementRef>;
- 
 
-  constructor(
-    private quranService: QuranService,
-  ) {
+
+  constructor() {
   }
 
   ngOnInit() {    

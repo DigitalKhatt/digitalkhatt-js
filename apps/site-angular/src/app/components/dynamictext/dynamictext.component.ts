@@ -1,9 +1,8 @@
 import { Component, AfterViewInit, OnInit, HostListener, Input, ViewChild, ElementRef, OnChanges, SimpleChanges } from '@angular/core';
-import { QuranService } from '../../services/quranservice/quranservice.service';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
+import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
 import { commonModules } from '../../app.config';
 
-
+const CSS_UNITS = 96.0 / 72.0;
 
 @Component({
     selector: 'quran-dynamictext',
@@ -12,7 +11,7 @@ import { commonModules } from '../../app.config';
     imports : [...commonModules]
 })
 export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
-  quranShaper: QuranShaper;
+  quranShaper: WasmMushafService;
 
   @Input() text: string;
   @Input() min: number = 50;
@@ -24,7 +23,7 @@ export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
   tatweel: number = 0;
 
 
-  CSS_UNITS = QuranService.CSS_UNITS;
+  CSS_UNITS = CSS_UNITS;
 
   @ViewChild("canvas", { static: true }) canvasEleRef: ElementRef<HTMLCanvasElement>;
 
@@ -34,14 +33,14 @@ export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
 
 
   constructor(
-    private quranService: QuranService,
+    private quranService: WasmMushafService,
   ) {
   }
 
   ngOnInit() {
     this.ctx = this.canvasEleRef.nativeElement.getContext('2d');
 
-    this.quranService.promise.then((respone: QuranShaper) => {
+    this.quranService.promise.then((respone: WasmMushafService) => {
       this.quranShaper = respone;
 
       this.initCanavas();
@@ -102,7 +101,7 @@ export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
 
   drawText(lineWidth) {
 
-    this.quranService.clearCanvas(this.ctx);
+    this.clearCanvas(this.ctx);
 
     let width = this.width + lineWidth;
 
@@ -112,6 +111,14 @@ export class DynamicTextComponent implements OnInit, AfterViewInit, OnChanges {
 
     this.drawLine();
 
+  }
+
+  clearCanvas(ctx) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Will always clear the right space
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
   }
 
   drawLine() {

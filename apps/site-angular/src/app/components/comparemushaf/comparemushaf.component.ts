@@ -1,6 +1,4 @@
 import { Component, AfterViewInit, OnInit, HostListener, Input, ViewChild, ElementRef, PipeTransform, Pipe, ViewChildren, QueryList } from '@angular/core';
-import { QuranService } from '../../services/quranservice/quranservice.service';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
 import { DomSanitizer, Title } from '@angular/platform-browser';
 
 import { IChange, diff } from 'json-diff-ts';

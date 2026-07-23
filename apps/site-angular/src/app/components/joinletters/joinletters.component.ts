@@ -1,6 +1,5 @@
 import { Component, AfterViewInit, OnInit, HostListener, Input, ViewChild, ElementRef } from '@angular/core';
-import { QuranService } from '../../services/quranservice/quranservice.service';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
+import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
 import { commonModules } from '../../app.config';
 
 
@@ -12,7 +11,7 @@ import { commonModules } from '../../app.config';
   imports: [...commonModules]
 })
 export class JoinLettersComponent implements OnInit, AfterViewInit {
-  quranShaper: QuranShaper;
+  quranShaper: WasmMushafService;
 
   glyphNames = ['meem.init', 'meem.medi', 'meem.fina', 'hah.init', 'hah.medi', 'hah.fina', 'meem.fina.ii', 'behshape.init',
     'behshape.medi', 'behshape.fina', 'alef.fina',
@@ -24,14 +23,14 @@ export class JoinLettersComponent implements OnInit, AfterViewInit {
   rightTatweel = 0;
 
   constructor(
-    private quranService: QuranService,
+    private quranService: WasmMushafService,
   ) {
   }
 
   ngOnInit() {
 
 
-    this.quranService.promise.then((respone: QuranShaper) => {
+    this.quranService.promise.then((respone: WasmMushafService) => {
       this.quranShaper = respone;
 
       this.initCanavas();

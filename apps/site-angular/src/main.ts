@@ -33,7 +33,6 @@ import { routes } from './app/app.routes';
 import { CacheRouteReuseStrategy } from './app/services/cache-route-reuse.strategy';
 import { LayoutService } from './app/services/layoutservice/layoutservice.service';
 import { SidebarContentsService } from './app/services/navigation/sidebarcontents';
-import { QuranService } from './app/services/quranservice/quranservice.service';
 import { MUSHAFLAYOUTTYPE, MushafLayoutType } from './app/services/qurantext.service';
 import { CustomIconRegistry } from './app/shared/custom-icon-registry';
 import { environment } from './environments/environment';
@@ -62,7 +61,6 @@ bootstrapApplication(AppComponent, {
       MatCardModule, MatIconModule, MatSidenavModule, PortalModule, MatSlideToggleModule, MatInputModule, MatAutocompleteModule, MatDividerModule,
       MatSelectModule, MatRadioModule, MatCheckboxModule, MatDialogModule, MatMenuModule, MatSnackBarModule, MatInputModule, MatFormFieldModule,      
       ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production })),
-    QuranService,
     LayoutService,
     { provide: MatIconRegistry, useClass: CustomIconRegistry },
     svgIconProviders,

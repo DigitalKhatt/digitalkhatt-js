@@ -1,5 +1,4 @@
 import { Component, AfterViewInit, OnInit, HostListener, OnDestroy, QueryList, ElementRef, ViewChild, NgZone, TemplateRef, ContentChildren, ViewChildren } from '@angular/core';
-import { QuranService } from '../../services/quranservice/quranservice.service';
 import { Subscription, animationFrameScheduler, Subject } from 'rxjs';
 
 import { startWith, auditTime, debounceTime, withLatestFrom, map } from 'rxjs/operators';
@@ -10,7 +9,6 @@ import { UntypedFormControl, Validators, UntypedFormGroup } from '@angular/forms
 
 import { PageView } from './page_view';
 import { RenderingQueue } from './rendering_queue';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { HammerGestureConfig, Title } from '@angular/platform-browser';
 
@@ -177,8 +175,7 @@ export class QuranOTFComponent implements OnInit, AfterViewInit, OnDestroy {
 
   hideElement: boolean = false;
 
-  constructor(private quranService: QuranService,
-    private sidebarContentsService: SidebarContentsService,
+  constructor(private sidebarContentsService: SidebarContentsService,
     public scrollDispatcher: ScrollDispatcher, private ngZone: NgZone,
     private elRef: ElementRef,
     private breakpointObserver: BreakpointObserver,
@@ -248,13 +245,6 @@ export class QuranOTFComponent implements OnInit, AfterViewInit, OnDestroy {
     this.maxPages = this.totalPages;
 
     this.pages = new Array(this.maxPages);
-
-    this.quranService.statusObserver.subscribe((status) => {
-      this.wasmStatus = status.message + " ...";
-      if (status.error) {
-        console.log("Error : " + JSON.stringify(status.error));
-      }
-    })
 
     window.onerror = (msg, url, lineNo, columnNo, error) => {
       console.log("Error occured: " + msg + error.stack);
@@ -327,7 +317,7 @@ export class QuranOTFComponent implements OnInit, AfterViewInit, OnDestroy {
         this.setViewport(this.getScale(this.zoomCtrl.value), false);
 
         this.quranPagesComponent.pageElements.forEach((page, index) => {
-          this.views[index] = new PageView(page.nativeElement, index, this.quranService, this.viewport, this.renderingQueue);
+          this.views[index] = new PageView(page.nativeElement, index, this.viewport, this.renderingQueue);
         });
 
         //this.quranShaper = respone; //respone.quranShaper;
@@ -382,13 +372,11 @@ export class QuranOTFComponent implements OnInit, AfterViewInit, OnDestroy {
             this.totalPages = this.totalPageTex;
             this.texFormat = true;
             this.fontScale = 1;
-            this.quranService.quranShaper.setScalePoint(this.fontScale);
             //this.outline = respone.getOutline(true);
           } else {
             this.totalPages = this.totalPageMedina;
             this.texFormat = false;
             this.fontScale = 0.80;
-            this.quranService.quranShaper.setScalePoint(this.fontScale);
             //this.outline = respone.getOutline(false);
           }
 
@@ -436,7 +424,6 @@ export class QuranOTFComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   fontScaleChanged(event) {
-    this.quranService.quranShaper.setScalePoint(event.value);
     this.ngZone.runOutsideAngular(() => {
       this.buffer.reset();
       this.update();
@@ -558,10 +545,25 @@ export class QuranOTFComponent implements OnInit, AfterViewInit, OnDestroy {
 
   }
 
+  getOutputScale(ctx) {
+    let devicePixelRatio = window.devicePixelRatio || 1;
+    let backingStoreRatio = ctx.webkitBackingStorePixelRatio ||
+      ctx.mozBackingStorePixelRatio ||
+      ctx.msBackingStorePixelRatio ||
+      ctx.oBackingStorePixelRatio ||
+      ctx.backingStorePixelRatio || 1;
+    let pixelRatio = devicePixelRatio / backingStoreRatio;
+    return {
+      sx: pixelRatio,
+      sy: pixelRatio,
+      scaled: pixelRatio !== 1,
+    };
+  }
+
   updateWidth(updateView: boolean, duringZoom: boolean = false) {
     var ctx = this.testcanvasRef.nativeElement.getContext('2d', { alpha: true, });
 
-    let outputScale = this.quranService.getOutputScale(ctx);
+    let outputScale = this.getOutputScale(ctx);
 
     this.viewport.hasRestrictedScaling = false;
 

@@ -54,12 +54,13 @@
   </div>
   <quran-joinletters></quran-joinletters>
   <p>The example below shows how a word can change width and shape dynamically, by stretching or shrinking the joining letters, depending on the length available.</p>
-  <quran-dynamictext text="رَبَّنَآ" [min]="30" [max]="30" [scale]="1"></quran-dynamictext>
-  <!--<quran-dynamictext  text="محمد" [min]="30" [max]="30" [scale]="1" style="display:inline-block;width:200px;"></quran-dynamictext>-->
+  <quran-dynamictext text="لِّلْمُتَّقِينَ" [min]="30" [max]="30" [scale]="1"></quran-dynamictext>
+  <!--<quran-dynamictext text="رَبَّنَآ" [min]="30" [max]="30" [scale]="1"></quran-dynamictext>-->
+
   <p>
     The following example shows the first line of the third page of Medina Mushaf. By increasing or decreasing the line width, the typesetter justifies the line dynamically by adjusting the letter widths and shapes according to the given justification rules.
   </p>
-  <quran-dynamictext text="إِنَّ ٱلَّذِينَ كَفَرُوا۟ سَوَآءٌ عَلَيْهِمْ ءَأَنذَرْتَهُمْ أَمْ لَمْ تُنذِرْهُمْ" [min]="50" [max]="100"></quran-dynamictext>
+  <quran-dynamictext text="إِنَّ ٱلَّذِينَ كَفَرُوا۟ سَوَآءٌ عَلَيْهِمْ ءَأَنذَرْتَهُمْ أَمْ لَمْ تُنذِرْهُمْ رَبَّنَآ" [min]="50" [max]="100"></quran-dynamictext>
   <p>Below is another example of the two first lines of page 205 of Medina Mushaf.</p>
   <quran-dynamictext text="ٱلتَّٰٓئِبُونَ ٱلْعَٰبِدُونَ ٱلْحَٰمِدُونَ ٱلسَّٰٓئِحُونَ" [min]="50" [max]="100"></quran-dynamictext>
   <p>Here you can put free text and check the behavior of the justification algorithm. Not all Arabic characters are supported.</p>

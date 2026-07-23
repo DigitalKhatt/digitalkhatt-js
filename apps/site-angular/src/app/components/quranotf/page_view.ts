@@ -1,10 +1,7 @@
 import { RenderingStates } from './rendering_states';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
 
 class PageView {
   renderingState: RenderingStates;
-  quranShaper: QuranShaper;
-  quranShaperPromise;
   private viewport;
   private canvas;
   private loadingIconDiv;
@@ -16,7 +13,7 @@ class PageView {
   zoomLayer;
   hasRestrictedScaling;
 
-  constructor(public div, private index, private quranService, viewport, private renderingQueue) {
+  constructor(public div, private index, viewport, private renderingQueue) {
     this.renderingState = RenderingStates.INITIAL;
 
 

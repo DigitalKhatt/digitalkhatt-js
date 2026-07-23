@@ -1,6 +1,5 @@
 import { Routes } from '@angular/router';
 import { HBMedinaComponent } from './components/hbmedina/hbmedina.component';
-import { QuranComponent } from './components/quran/quran.component';
 import { AboutComponent } from './components/about/about.component';
 import { QuranOTFComponent } from './components/quranotf/quranotf.component';
 import { OldMedinaComponent } from './components/oldmedina/oldmedina.component';
@@ -31,14 +30,8 @@ export const routes: Routes = [
     ]
   },
   {
-    path: '',
-    component: QuranComponent,
-    children: [
-      {
-        path: 'about',
-        component: AboutComponent
-      }
-    ]
+    path: 'about',
+    component: AboutComponent
   },
   {
     path: 'otf',

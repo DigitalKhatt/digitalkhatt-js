@@ -1,6 +1,5 @@
 import { AfterViewInit, Component, OnInit, ViewChild } from '@angular/core';
 import { Title } from '@angular/platform-browser';
-import { QuranShaper } from '../../services/quranservice/quran_shaper';
 
 import { IChange, diff } from 'json-diff-ts';
 import { commonModules } from '../../app.config';
@@ -12,8 +11,6 @@ import { commonModules } from '../../app.config';
   imports: [...commonModules]
 })
 export class CompareTajweedComponent implements OnInit, AfterViewInit {
-  quranShaper: QuranShaper;
-
   @ViewChild('file') file;
   fileIndex: number;
   files = [];
