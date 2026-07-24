@@ -41,14 +41,10 @@ class PageView {
     this.hasRestrictedScaling = false;
   }
 
-  // Unlike hbmedina's chunked DOM rendering, draw() below has no internal
-  // checkpoint that awaits a pause -- the WASM call can't be interrupted
-  // mid-flight. pause()/resume() still exist so the component's cooperative
-  // scheduler (renderView/forceRendering) can track priority the same way;
-  // they just don't stall an in-flight render.
   pause() {
     if (this.renderingState === RenderingStates.RUNNING && this.resume == null) {
       this.renderingState = RenderingStates.PAUSED;
+      this.paintTask?.cancel();
       this.resume = () => {
         if (this.renderingState === RenderingStates.PAUSED) {
           this.renderingState = RenderingStates.RUNNING;
@@ -144,11 +140,11 @@ class PageView {
     await this.quranService.printPage(
       this.mushafType, this.pageIndex, ctx, token, tajweedColor, applyForce, fontScale);
 
-    // Only cancellation withholds the result: the WASM call itself can't be
-    // interrupted mid-flight the way hbmedina's chunked DOM rendering can, so
-    // a pause() that raced with an in-flight draw must not discard already
-    // -completed work -- finalize it once printPage resolves regardless of
-    // renderingState.
+    // printPage() itself already stops short of drawing once it notices
+    // cancellation (see pause() above) -- shaping (unavoidable, already
+    // finished by the time we get here) still happened, but the separate
+    // drawing pass was skipped. Reflect that here: don't finalize a result
+    // that was never actually drawn.
     if (!token.isCancelled()) {
       this.renderingState = RenderingStates.FINISHED;
       showCanvas();
@@ -163,13 +159,26 @@ class PageView {
         delete this.loadingIconDiv;
       }
       this.resetZoomLayer(/* removeFromDOM = */ true);
-    } else if (this.staleCanvas) {
-      // Cancelled before the replacement could be revealed (e.g. evicted or
-      // re-marked stale again mid-flight) -- discard the abandoned new
-      // canvas and keep showing the stale one rather than losing it.
-      this.canvas?.remove();
-      this.canvas = this.staleCanvas;
-      this.staleCanvas = null;
+    } else {
+      // Cancelled -- discard the new (incomplete, still-hidden) canvas and
+      // restore whichever content was on screen before, then go back to
+      // INITIAL rather than leaving renderingState stuck at RUNNING: draw()
+      // only ever proceeds from INITIAL, so without this a page cancelled
+      // this way could never be picked up again even after it becomes
+      // relevant, and the abandoned canvas would linger in the DOM forever.
+      if (this.canvas) {
+        this.canvas.width = 0;
+        this.canvas.height = 0;
+        this.canvas.remove();
+      }
+      if (this.staleCanvas) {
+        this.canvas = this.staleCanvas;
+        this.staleCanvas = null;
+      } else {
+        this.canvas = null;
+      }
+      this.renderingState = RenderingStates.INITIAL;
+      this.resume = null;
     }
     if (token === this.paintTask) {
       this.paintTask = null;
