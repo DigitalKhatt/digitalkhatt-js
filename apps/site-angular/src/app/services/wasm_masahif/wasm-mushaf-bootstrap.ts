@@ -6,6 +6,12 @@ export const ASSET_ROOT = 'assets/wasm_masahif';
 // C++ runtime symbols and table entries form one ABI unit.
 export const WASM_ASSET_VERSION = '20260722-42';
 
+// Bump when SHARED_FONT_FILES, any FONT_CONFIG[type].project file, or any
+// FONT_FILES content changes, so browsers fetch the new copies instead of
+// serving stale cached ones. Independent from WASM_ASSET_VERSION: font data
+// can change without the linked module set changing, and vice versa.
+export const FONT_ASSET_VERSION = '1';
+
 export const SHARED_FONT_FILES = [
   'mfplain.mp',
   'mpost.mp',
@@ -52,7 +58,7 @@ async function copyAssetToFs(module: any, assetPath: string, fsPath: string): Pr
   // Absolute path: a worker script's relative URLs resolve against its own
   // (bundler-chosen, unpredictable) chunk path, not the document's origin,
   // so this must not depend on the caller's base URL.
-  const response = await fetch(`/${ASSET_ROOT}/${assetPath}`);
+  const response = await fetch(`/${ASSET_ROOT}/${assetPath}?v=${FONT_ASSET_VERSION}`);
   if (!response.ok) {
     throw new Error(`Unable to load ${assetPath}: HTTP ${response.status}`);
   }
