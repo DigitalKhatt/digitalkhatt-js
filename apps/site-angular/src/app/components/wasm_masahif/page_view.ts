@@ -14,6 +14,7 @@ class PageView {
   private staleCanvas;
   private loadingIconDiv;
   private paintTask;
+  private pausePromise: Promise<boolean>;
   id;
   resume;
 
@@ -41,16 +42,32 @@ class PageView {
     this.hasRestrictedScaling = false;
   }
 
+  // Unlike hbmedina's chunked DOM rendering, the WASM shaping call inside
+  // draw() can't be interrupted mid-flight -- by the time pause() is called
+  // (the scheduler has moved priority to a different page), that call is
+  // already running in the worker and will finish regardless, a sunk cost.
+  // But once it finishes, printPage() has a real choice: draw the result, or
+  // not. pausePromise is what lets it wait there for a resume decision --
+  // same pattern as otfmushaf/page_view.ts's chunked-rendering pause(), just
+  // with the wait point moved to "after shaping" instead of "after each
+  // line" since that's the only place our (opaque, single-call) WASM path
+  // has a real checkpoint. Awaiting an unresolved promise costs nothing and
+  // blocks nothing else -- other pages keep shaping/drawing independently
+  // while this one waits.
   pause() {
     if (this.renderingState === RenderingStates.RUNNING && this.resume == null) {
       this.renderingState = RenderingStates.PAUSED;
-      this.paintTask?.cancel();
-      this.resume = () => {
-        if (this.renderingState === RenderingStates.PAUSED) {
-          this.renderingState = RenderingStates.RUNNING;
-        }
-        this.resume = null;
-      };
+      this.pausePromise = new Promise<boolean>(resolve => {
+        this.resume = () => {
+          if (this.renderingState === RenderingStates.PAUSED) {
+            this.renderingState = RenderingStates.RUNNING;
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+          this.resume = null;
+        };
+      });
     }
   }
 
@@ -88,11 +105,17 @@ class PageView {
       return Promise.resolve();
     }
 
+
+    let cancelled = false;
     let token = {
-      cancelled: false,
-      isCancelled: function () { return this.cancelled },
-      cancel: function () {
-        this.cancelled = true;
+      isCancelled: () => cancelled,
+      cancel: () => { cancelled = true; },
+      waitIfPaused: async (): Promise<boolean> => {
+        if (this.renderingState === RenderingStates.PAUSED) {
+          const resumed = await this.pausePromise;
+          if (!resumed) return false;
+        }
+        return !cancelled;
       },
     };
 
@@ -101,8 +124,6 @@ class PageView {
     }
 
     this.paintTask = token;
-
-    let div = this.div;
 
     this.canvas = document.createElement('canvas');
     this.canvas.setAttribute('hidden', 'hidden');
@@ -146,6 +167,11 @@ class PageView {
     // drawing pass was skipped. Reflect that here: don't finalize a result
     // that was never actually drawn.
     if (!token.isCancelled()) {
+      // Every place that reassigns this.paintTask away from a token
+      // (draw()'s own re-entry guard above, markStaleForRerender(),
+      // reset()) calls cancel() on the old one first -- so !isCancelled()
+      // here already guarantees token === this.paintTask; no separate
+      // ownership check needed on this side.
       this.renderingState = RenderingStates.FINISHED;
       showCanvas();
       if (this.staleCanvas) {
@@ -159,13 +185,18 @@ class PageView {
         delete this.loadingIconDiv;
       }
       this.resetZoomLayer(/* removeFromDOM = */ true);
-    } else {
-      // Cancelled -- discard the new (incomplete, still-hidden) canvas and
-      // restore whichever content was on screen before, then go back to
-      // INITIAL rather than leaving renderingState stuck at RUNNING: draw()
-      // only ever proceeds from INITIAL, so without this a page cancelled
-      // this way could never be picked up again even after it becomes
-      // relevant, and the abandoned canvas would linger in the DOM forever.
+    } else if (token === this.paintTask) {
+      // Cancelled, but still the current (sole) attempt for this page --
+      // isCancelled() alone can't tell that apart from being superseded by
+      // a newer draw() call for this SAME page (see the trailing `else`
+      // below): both set it true. This is the other way to get cancelled
+      // -- our own pause() was never resumed, or our shaping request was
+      // displaced by a different page's in WasmMushafService's coalescing
+      // queue (requestShaping()) -- and in both cases nothing else owns
+      // these fields yet, so discarding the incomplete canvas and going
+      // back to INITIAL is safe. Without this, a page cancelled this way
+      // could never be picked up again even after it becomes relevant, and
+      // the abandoned canvas would linger in the DOM forever.
       if (this.canvas) {
         this.canvas.width = 0;
         this.canvas.height = 0;
@@ -180,6 +211,10 @@ class PageView {
       this.renderingState = RenderingStates.INITIAL;
       this.resume = null;
     }
+    // else: cancelled AND token !== this.paintTask -- a newer draw() call
+    // for this same page already took over every field above; there's
+    // nothing left for this (superseded) call to do.
+
     if (token === this.paintTask) {
       this.paintTask = null;
     }

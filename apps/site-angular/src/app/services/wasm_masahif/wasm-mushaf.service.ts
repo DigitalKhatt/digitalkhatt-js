@@ -81,9 +81,22 @@ export class WasmMushafService implements OnDestroy {
   private worker: Worker;
   private requestSeq = 0;
   private readonly pendingRequests = new Map<number, {
-    resolve: (lines: ShapedLine[]) => void;
+    resolve: (lines: ShapedLine[] | null) => void;
     reject: (error: any) => void;
   }>();
+  // The worker can only shape one page at a time. Rather than letting every
+  // page that becomes highest-priority fire its own requestShaping() call
+  // (which would just pile up behind each other in the worker's own message
+  // queue, wasting time on pages scrolled past before their turn), at most
+  // one request is ever actually sent (`activeRequestId`) plus at most one
+  // waiting to be sent next (`queuedNext`) -- a newer caller always displaces
+  // whatever was queued but not yet sent, so the worker converges on
+  // whatever is current instead of working through a backlog. This
+  // deliberately does NOT serialize the rest of printPage() (drawing, or
+  // waiting on a pause/resume decision) -- only the actual worker request,
+  // so a page waiting on pausePromise never blocks another page from shaping.
+  private activeRequestId: number | null = null;
+  private queuedNext: { requestId: number; message: any } | null = null;
 
   constructor() {
     this.promise = this.initialize();
@@ -137,12 +150,22 @@ export class WasmMushafService implements OnDestroy {
   private handleWorkerMessage(event: MessageEvent): void {
     const data = event.data;
     const pending = this.pendingRequests.get(data.requestId);
-    if (!pending) return; // Superseded/stale response -- see requestShaping().
-    this.pendingRequests.delete(data.requestId);
-    if (data.type === 'shapePageResult') {
-      pending.resolve(data.lines);
-    } else {
-      pending.reject(new Error(data.message));
+    if (pending) {
+      this.pendingRequests.delete(data.requestId);
+      if (data.type === 'shapePageResult') {
+        pending.resolve(data.lines);
+      } else {
+        pending.reject(new Error(data.message));
+      }
+    }
+
+    if (data.requestId !== this.activeRequestId) return;
+    this.activeRequestId = null;
+    if (this.queuedNext) {
+      const next = this.queuedNext;
+      this.queuedNext = null;
+      this.activeRequestId = next.requestId;
+      this.worker.postMessage(next.message);
     }
   }
 
@@ -151,18 +174,37 @@ export class WasmMushafService implements OnDestroy {
   // by page_view.ts's PageView.draw() comment) -- so cancellation here just
   // means "the caller stops waiting," not "the worker stops computing."
   // printPage() re-checks its own token after this resolves and discards a
-  // stale result rather than drawing it.
+  // stale result rather than drawing it. Only one request is ever actually
+  // in flight to the worker at a time (see activeRequestId/queuedNext
+  // above); a caller whose request gets displaced before ever being sent
+  // resolves with `null` here rather than hanging or eventually shaping a
+  // page nobody wants anymore.
   private requestShaping(mushafType: MushafLayoutType, pageIndex: number, fontScale: number,
     tajweedColor: boolean, applyForce: boolean, textLines: string[], widthRatios: number[],
-    lineTypes: number[]): Promise<ShapedLine[]> {
+    lineTypes: number[]): Promise<ShapedLine[] | null> {
     const requestId = ++this.requestSeq;
-    return new Promise((resolve, reject) => {
+    const message = {
+      type: 'shapePage', requestId, mushafType, pageIndex, fontScale, tajweedColor, applyForce,
+      textLines, widthRatios, lineTypes,
+    };
+
+    const result = new Promise<ShapedLine[] | null>((resolve, reject) => {
       this.pendingRequests.set(requestId, { resolve, reject });
-      this.worker.postMessage({
-        type: 'shapePage', requestId, mushafType, pageIndex, fontScale, tajweedColor, applyForce,
-        textLines, widthRatios, lineTypes,
-      });
     });
+
+    if (this.activeRequestId === null) {
+      this.activeRequestId = requestId;
+      this.worker.postMessage(message);
+    } else {
+      if (this.queuedNext) {
+        const superseded = this.pendingRequests.get(this.queuedNext.requestId);
+        this.pendingRequests.delete(this.queuedNext.requestId);
+        superseded?.resolve(null);
+      }
+      this.queuedNext = { requestId, message };
+    }
+
+    return result;
   }
 
   private errorMessage(error: any): string {
@@ -323,7 +365,16 @@ export class WasmMushafService implements OnDestroy {
     const lines = await this.requestShaping(
       mushafType, pageIndex, fontScale, tajweedColor, applyForce, textLines, widthRatios, lineTypes);
 
-    if (token.isCancelled()) return;
+    if (lines === null) {
+      // Displaced before the worker ever got to it (a newer page's request
+      // took this slot) -- nothing was shaped, so there's nothing to wait
+      // on a pause/resume decision for. Mark cancelled so draw() reports
+      // this the same way any other skipped render does.
+      token.cancel();
+      return;
+    }
+
+    if (!(await token.waitIfPaused())) return;
 
     const otLayout = this.otLayouts[mushafType];
     const scaleBy = otLayout.scaleBy();

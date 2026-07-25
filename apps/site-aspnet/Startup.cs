@@ -69,7 +69,7 @@ namespace DigitalKhatt
       });
 
       var provider = new FileExtensionContentTypeProvider();
-      // Add new mappings           
+      // Add new mappings
       provider.Mappings[".mp"] = "text/plain";
       provider.Mappings[".properties"] = "text/plain";
       provider.Mappings[".fea"] = "text/plain";
@@ -77,17 +77,25 @@ namespace DigitalKhatt
       provider.Mappings[".dat"] = "application/octet-stream";
       provider.Mappings[".mem"] = "text/html";
 
-
-
-      app.UseStaticFiles(new StaticFileOptions
+      var staticFileOptions = new StaticFileOptions
       {
-        ContentTypeProvider = provider
-      });
+        ContentTypeProvider = provider,
+        OnPrepareResponse = ctx =>
+        {
+          // Every request under wasm_masahif carries a ?v=WASM_ASSET_VERSION or
+          // ?v=FONT_ASSET_VERSION query string (see wasm-mushaf-bootstrap.ts), so
+          // content changes always come in under a new URL and it's safe to let
+          // browsers cache the response indefinitely without revalidation.
+          if (ctx.Context.Request.Path.StartsWithSegments("/assets/wasm_masahif"))
+          {
+            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+          }
+        }
+      };
 
-      app.UseSpaStaticFiles(new StaticFileOptions
-      {
-        ContentTypeProvider = provider
-      });
+      app.UseStaticFiles(staticFileOptions);
+
+      app.UseSpaStaticFiles(staticFileOptions);
 
       app.UseRouting();
 

@@ -200,29 +200,17 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     this.views.forEach(a => a.update(this.viewport, this.viewport.hasRestrictedScaling, false));
   }
 
-  // The shared worker (wasm-mushaf.service.ts) can only run one
-  // shapeMushafPage() at a time. Unlike hbmedina's chunked, genuinely-
-  // interruptible DOM rendering -- which is why the shared scheduler in
-  // BaseMushafViewerComponent.renderView() is willing to start a second
-  // render while the first is merely "paused" -- a WASM render already in
-  // flight can't be interrupted, so letting the scheduler start an
-  // overlapping drawView() for a different page just queues another request
-  // behind the worker's single-threaded message queue. During a fast multi-
-  // page scroll that queue can fill up with pages already scrolled past,
-  // delaying the page actually landed on. Piggyback on whatever is already
-  // in flight instead; once it settles, the base class's own
-  // .finally(() => forceRendering(null)) re-evaluates priority fresh and
-  // this runs again for whatever is now actually current.
-  private inFlightDraw: Promise<any> | null = null;
-
+  // The shared worker can only shape one page at a time, but that's now
+  // enforced at the right layer -- a coalescing single-slot queue inside
+  // WasmMushafService.requestShaping() -- instead of here. That lets the
+  // scheduler start multiple pages' draw() calls concurrently (one shaping,
+  // another sitting in PageView.pause()'s pausePromise waiting to see if
+  // it's still wanted) without one blocking the other, matching how
+  // hbmedina's/otfmushaf's chunked, genuinely-interruptible renderers were
+  // already free to do.
   protected drawView(view: PageView, canvasWidth: number, canvasHeight: number): Promise<any> {
-    if (this.inFlightDraw) {
-      return this.inFlightDraw;
-    }
-    const draw = view.draw(canvasWidth, canvasHeight, this.tajweedColorCtrl.value,
+    return view.draw(canvasWidth, canvasHeight, this.tajweedColorCtrl.value,
       this.applyForceCtrl.value, this.fontScale, this.viewport.hasRestrictedScaling);
-    this.inFlightDraw = draw.finally(() => { this.inFlightDraw = null; });
-    return this.inFlightDraw;
   }
 
   protected computeOutlineY(outline): number {
