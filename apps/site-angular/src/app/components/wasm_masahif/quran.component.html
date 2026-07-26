@@ -92,6 +92,9 @@
             IndoPak (15 lines)
           </button>
         </mat-menu>
+        <button *ngIf="!isTouchDevice" mat-icon-button (click)="toggleFullScreen()" title="Fullscreen">
+          <mat-icon>fullscreen</mat-icon>
+        </button>
         <button mat-icon-button [routerLink]='["/about"]' title="About">
           <mat-icon>info</mat-icon>
         </button>
@@ -115,8 +118,8 @@
     <mat-sidenav-content>
       <app-page-number-box [loaded]="loaded" [pageNumber]="currentPageNumber"></app-page-number-box>
 
-      <div #viewerContainer id="viewerContainer" cdkScrollable [style.visibility]="loaded ? 'visible' : 'hidden'" (toggleFullScreen)="toggleFullScreen()"
-           appQuranGestures (zoom)="zoom($event)" (endzoom)="endzoom($event)">
+      <div #viewerContainer id="viewerContainer" cdkScrollable [style.visibility]="loaded ? 'visible' : 'hidden'"
+           (touchstart)="onViewerTouchStart($event)" (touchend)="onViewerTouchEnd($event)">
         <div id="viewer" class="pdfViewer">
           <div #page *ngFor="let page of pages; let index = index; trackBy: trackByIndex" class="page" data-loaded="false" [hidden]="index >= totalPages"></div>
         </div>

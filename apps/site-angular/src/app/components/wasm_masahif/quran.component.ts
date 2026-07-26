@@ -48,6 +48,23 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
 
   private maxCanvasPixels = 16777216;
 
+  // Single-finger tap on the viewer toggles fullscreen -- the "tap to
+  // immerse/tap to leave" pattern common in mobile reader/video apps.
+  // Desktop keeps the explicit toolbar button + native Escape-to-exit
+  // instead (a plain mouse click on the page shouldn't hijack fullscreen).
+  // Distinguished from a scroll drag by requiring the touch to stay within
+  // TAP_MAX_MOVEMENT_PX and end within TAP_MAX_DURATION_MS; multi-touch
+  // (pinch) never arms it since only a single touch point starts the timer.
+  private static readonly TAP_MAX_MOVEMENT_PX = 10;
+  private static readonly TAP_MAX_DURATION_MS = 300;
+  private tapStartX = 0;
+  private tapStartY = 0;
+  private tapStartTime = 0;
+
+  // Set in the constructor -- see there for why touch capability, not just
+  // isIOS/isAndroid, decides this.
+  isTouchDevice = false;
+
   loading = true;
 
   applyForceCtrl: UntypedFormControl;
@@ -98,6 +115,50 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     if (isIOS || isAndroid) {
       this.maxCanvasPixels = 5242880;
     }
+
+    // Hides the toolbar's fullscreen button on phones/tablets, where
+    // onViewerTouchStart/End's tap gesture already toggles fullscreen --
+    // the button would just be a redundant, easy-to-fat-finger control
+    // there. Checked via touch capability rather than only isIOS/isAndroid:
+    // iPadOS Safari's default UA impersonates desktop Mac Safari (no "iPad"
+    // substring), so UA sniffing alone misses tablets exactly like the ones
+    // named in this request.
+    this.isTouchDevice = isIOS || isAndroid
+      || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+  }
+
+  onViewerTouchStart(event: TouchEvent): void {
+    if (event.touches.length !== 1) {
+      // Second finger landed (pinch) -- disarm, this isn't a tap.
+      this.tapStartTime = 0;
+      return;
+    }
+    this.tapStartX = event.touches[0].clientX;
+    this.tapStartY = event.touches[0].clientY;
+    this.tapStartTime = Date.now();
+  }
+
+  onViewerTouchEnd(event: TouchEvent): void {
+    if (this.tapStartTime === 0 || event.touches.length > 0) {
+      // Not armed, or a finger is still down (mid pinch/multi-touch release).
+      this.tapStartTime = 0;
+      return;
+    }
+
+    const elapsed = Date.now() - this.tapStartTime;
+    this.tapStartTime = 0;
+
+    const touch = event.changedTouches[0];
+    if (!touch || elapsed > WasmMasahifComponent.TAP_MAX_DURATION_MS) {
+      return;
+    }
+
+    const distance = Math.hypot(touch.clientX - this.tapStartX, touch.clientY - this.tapStartY);
+    if (distance > WasmMasahifComponent.TAP_MAX_MOVEMENT_PX) {
+      return;
+    }
+
+    this.toggleFullScreen();
   }
 
   override ngOnInit(): void {
