@@ -72,6 +72,7 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
       elRef, breakpointObserver, matDialog, router, route);
 
     this.applyForceCtrl = new UntypedFormControl(false);
+    this.updateApplyForceAvailability();
 
     this.quranService.statusObserver.subscribe((status) => {
       if (status.error) {
@@ -202,6 +203,7 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     this.highestPriorityPage = null;
 
     this.applyMushafLayoutType(newType);
+    this.updateApplyForceAvailability();
 
     this.totalPages = this.quranTextService.nbPages;
     this.maxPages = this.totalPages;
@@ -228,6 +230,22 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
       this.setPage(Math.min(this.currentPageNumber, this.totalPages));
       this.update();
     });
+  }
+
+  // IndoPak's "Optimize marks" (applyForceCtrl) physics-solver pass isn't
+  // meant for this mushaf -- forced off and disabled so it can't be toggled
+  // on there, re-enabled for New/Old Madinah. {emitEvent: false} since
+  // switchMushaf() already does its own full destroy/rebuild + update()
+  // regardless -- letting this trigger the applyForceCtrl.valueChanges
+  // subscription (markAllViewsStale + update) too would just be redundant
+  // work on views that are about to be destroyed anyway.
+  private updateApplyForceAvailability(): void {
+    if (this.mushafType === MushafLayoutType.IndoPak15Lines) {
+      this.applyForceCtrl.setValue(false, { emitEvent: false });
+      this.applyForceCtrl.disable({ emitEvent: false });
+    } else {
+      this.applyForceCtrl.enable({ emitEvent: false });
+    }
   }
 
   // buffer.reset() (the base class default) destroys every buffered page's
