@@ -4,13 +4,13 @@ export const ASSET_ROOT = 'assets/wasm_masahif';
 // Bump when deploying a newly linked main/side-module set. Dynamic WASM
 // modules must not be mixed with an older cached main module because their
 // C++ runtime symbols and table entries form one ABI unit.
-export const WASM_ASSET_VERSION = '20260722-42';
+export const WASM_ASSET_VERSION = '20260722-43';
 
 // Bump when SHARED_FONT_FILES, any FONT_CONFIG[type].project file, or any
 // FONT_FILES content changes, so browsers fetch the new copies instead of
 // serving stale cached ones. Independent from WASM_ASSET_VERSION: font data
 // can change without the linked module set changing, and vice versa.
-export const FONT_ASSET_VERSION = '1';
+export const FONT_ASSET_VERSION = '2';
 
 export const SHARED_FONT_FILES = [
   'mfplain.mp',
