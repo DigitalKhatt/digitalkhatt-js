@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnInit, ElementRef, NgZone, Inject } from '@angular/core';
+import { Component, AfterViewInit, OnInit, ElementRef, NgZone, ChangeDetectorRef } from '@angular/core';
 import { WasmMushafService } from '../../services/wasm_masahif/wasm-mushaf.service';
 
 import { UntypedFormControl } from '@angular/forms';
@@ -10,10 +10,10 @@ import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ScrollDispatcher } from '@angular/cdk/scrolling';
 import { commonModules } from '../../app.config';
-import { MushafLayoutType, MUSHAFLAYOUTTYPE } from '../../services/qurantext.service';
+import { MushafLayoutType, mushafTypeFromRouteSegment, mushafTypeToRouteSegment } from '../../services/qurantext.service';
 import { MushafSidebarComponent } from '../mushaf-sidebar/mushaf-sidebar.component';
 import { PageNumberBoxComponent } from '../page-number-box/page-number-box.component';
-import { BaseMushafViewerComponent } from '../mushaf-viewer/base-mushaf-viewer.component';
+import { BaseMushafViewerComponent, PDFPageViewBuffer, DEFAULT_CACHE_SIZE } from '../mushaf-viewer/base-mushaf-viewer.component';
 import { PageView } from './page_view';
 
 // OtLayout::InterLineSpacing (design units), converted to the same "255x410
@@ -52,8 +52,9 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
 
   applyForceCtrl: UntypedFormControl;
 
-  constructor(@Inject(MUSHAFLAYOUTTYPE) mushafLayoutType: MushafLayoutType,
+  constructor(
     private quranService: WasmMushafService,
+    private cdr: ChangeDetectorRef,
     sidebarContentsService: SidebarContentsService,
     scrollDispatcher: ScrollDispatcher, ngZone: NgZone,
     elRef: ElementRef,
@@ -61,7 +62,13 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     matDialog: MatDialog,
     router: Router,
     route: ActivatedRoute) {
-    super(mushafLayoutType, /* defaultFontScale = */ 1, sidebarContentsService, scrollDispatcher, ngZone,
+    // Unlike hb/ot, the wasm route has no per-mushaf MUSHAFLAYOUTTYPE
+    // provider (see app.routes.ts) -- all three masahif share the single
+    // 'wasm/:type' route, so the initial type comes from the URL segment
+    // itself. ngOnInit's paramMap subscription below picks up any later
+    // change to that same segment (a router.navigate() from selectMushaf()).
+    super(mushafTypeFromRouteSegment(route.snapshot.paramMap.get('type')),
+      /* defaultFontScale = */ 1, sidebarContentsService, scrollDispatcher, ngZone,
       elRef, breakpointObserver, matDialog, router, route);
 
     this.applyForceCtrl = new UntypedFormControl(false);
@@ -90,6 +97,21 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     if (isIOS || isAndroid) {
       this.maxCanvasPixels = 5242880;
     }
+  }
+
+  override ngOnInit(): void {
+    super.ngOnInit();
+
+    // paramMap replays the current segment immediately on subscribe, which
+    // switchMushaf()'s own newType===this.mushafType guard already no-ops
+    // against -- the constructor above applied that same initial value, and
+    // views/pageElements aren't ready for a rebuild this early anyway (that
+    // only happens after ngAfterViewInit). Only a later router.navigate()
+    // (selectMushaf(), or the user editing the URL/using back-forward)
+    // actually changes the segment and triggers a rebuild.
+    this.route.paramMap.subscribe(params => {
+      this.switchMushaf(mushafTypeFromRouteSegment(params.get('type')));
+    });
   }
 
   ngAfterViewInit() {
@@ -143,6 +165,69 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
 
   protected createPageView(pageElement: HTMLElement, index: number): PageView {
     return new PageView(pageElement, index, this.quranService, this.mushafType, this.viewport);
+  }
+
+  // Called from the toolbar's mushaf-switcher menu. Navigates rather than
+  // calling switchMushaf() directly, so the URL reflects the current mushaf
+  // (bookmarkable/shareable, works with back/forward) -- since this stays
+  // on the same 'wasm/:type' routeConfig (see app.routes.ts), Angular's
+  // default shouldReuseRoute keeps this same component instance alive and
+  // just re-emits ActivatedRoute.paramMap, which ngOnInit's subscription
+  // above turns back into the actual switchMushaf() rebuild.
+  selectMushaf(newType: MushafLayoutType): void {
+    if (newType === this.mushafType) {
+      return;
+    }
+    this.router.navigate([`/${this.mushafRoutePrefix}/${mushafTypeToRouteSegment(newType)}`]);
+  }
+
+  // Switches masahif in place -- no component destroy/recreate (see
+  // selectMushaf() above) and no re-running the (already-resolved, since
+  // WasmMushafService is a shared singleton -- see the constructor comment
+  // above) WASM load. quranService.printPage()/shapeText() etc. all take
+  // mushafType as an explicit per-call argument, so the only state actually
+  // baked in per mushaf is: this.mushafType/quranTextService/defaultFontSize
+  // (applyMushafLayoutType), the page count/outline derived from it, and
+  // each PageView's own captured mushafType (baked in at construction, see
+  // page_view.ts) -- so every existing view must be torn down and rebuilt
+  // rather than just marked stale.
+  private switchMushaf(newType: MushafLayoutType): void {
+    if (newType === this.mushafType) {
+      return;
+    }
+
+    this.views.forEach(view => view.destroy());
+    this.views = [];
+    this.buffer = new PDFPageViewBuffer<PageView>(DEFAULT_CACHE_SIZE);
+    this.highestPriorityPage = null;
+
+    this.applyMushafLayoutType(newType);
+
+    this.totalPages = this.quranTextService.nbPages;
+    this.maxPages = this.totalPages;
+    this.outline = this.quranTextService.outline;
+
+    this.setViewport(this.getScale(this.zoomCtrl.value), false);
+    this.pages = new Array(this.maxPages);
+
+    // pages.length just changed, but *ngFor won't necessarily add/remove any
+    // page divs for it -- switching between two masahif with the same page
+    // count (e.g. New/Old Madinah, both 604) reuses the exact same DOM nodes
+    // under trackByIndex, so pageElements.changes never fires. Forcing
+    // change detection synchronously (rather than waiting on that event)
+    // works either way: it flushes the *ngFor diff when the count did
+    // change, and is a no-op otherwise, and pageElements is up to date
+    // immediately after in both cases.
+    this.cdr.detectChanges();
+
+    this.ngZone.runOutsideAngular(() => {
+      this.pageElements.forEach((page, index) => {
+        this.views[index] = this.createPageView(page.nativeElement, index);
+      });
+
+      this.setPage(Math.min(this.currentPageNumber, this.totalPages));
+      this.update();
+    });
   }
 
   // buffer.reset() (the base class default) destroys every buffered page's

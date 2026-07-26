@@ -50,7 +50,7 @@
           </mat-option>
         </mat-select>
 
-        <mat-slider class="hiddenSmallView fontsize" min="0.5" max="1.2" step="0.01"
+        <mat-slider class="fontsize" min="0.5" max="1.2" step="0.01"
                     thumbLabel [displayWith]="formatLabel" #ngSlider>
           <input matSliderThumb #ngSliderThumb="matSliderThumb" [formControl]="fontScaleCtrl" name="fontScale" (dragEnd)="fontSizeChanged()"/>
         </mat-slider>
@@ -71,7 +71,26 @@
             <mat-icon>auto_fix_high</mat-icon>
             <mat-slide-toggle [formControl]="applyForceCtrl">Optimize marks</mat-slide-toggle>
           </div>
-          <button mat-menu-item type="button" (click)="navigateToMushaf(3)">IndoPak15</button>
+        </mat-menu>
+        <button mat-icon-button [matMenuTriggerFor]="mushafMenu" title="Switch Mushaf">
+          <mat-icon>menu_book</mat-icon>
+        </button>
+        <mat-menu #mushafMenu="matMenu" class="panelClass">
+          <button mat-menu-item type="button" [disabled]="mushafType === MushafLayoutTypeEnum.NewMadinah"
+                  (click)="selectMushaf(MushafLayoutTypeEnum.NewMadinah)">
+            <mat-icon *ngIf="mushafType === MushafLayoutTypeEnum.NewMadinah">check</mat-icon>
+            New Madinah
+          </button>
+          <button mat-menu-item type="button" [disabled]="mushafType === MushafLayoutTypeEnum.OldMadinah"
+                  (click)="selectMushaf(MushafLayoutTypeEnum.OldMadinah)">
+            <mat-icon *ngIf="mushafType === MushafLayoutTypeEnum.OldMadinah">check</mat-icon>
+            Old Madinah
+          </button>
+          <button mat-menu-item type="button" [disabled]="mushafType === MushafLayoutTypeEnum.IndoPak15Lines"
+                  (click)="selectMushaf(MushafLayoutTypeEnum.IndoPak15Lines)">
+            <mat-icon *ngIf="mushafType === MushafLayoutTypeEnum.IndoPak15Lines">check</mat-icon>
+            IndoPak (15 lines)
+          </button>
         </mat-menu>
         <button mat-icon-button [routerLink]='["/about"]' title="About">
           <mat-icon>info</mat-icon>
@@ -99,7 +118,7 @@
       <div #viewerContainer id="viewerContainer" cdkScrollable [style.visibility]="loaded ? 'visible' : 'hidden'" (toggleFullScreen)="toggleFullScreen()"
            appQuranGestures (zoom)="zoom($event)" (endzoom)="endzoom($event)">
         <div id="viewer" class="pdfViewer">
-          <div #page *ngFor="let page of pages; let index = index" class="page" data-loaded="false" [hidden]="index >= totalPages"></div>
+          <div #page *ngFor="let page of pages; let index = index; trackBy: trackByIndex" class="page" data-loaded="false" [hidden]="index >= totalPages"></div>
         </div>
       </div>
 

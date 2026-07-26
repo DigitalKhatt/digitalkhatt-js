@@ -194,23 +194,7 @@ export abstract class BaseMushafViewerComponent<TView extends MushafPageView> im
 
     this.debug = this.route.snapshot.queryParams.debug !== undefined;
 
-    switch (mushafLayoutType) {
-      case MushafLayoutType.OldMadinah:
-        this.mushafType = MushafLayoutType.OldMadinah;
-        this.quranTextService = OldMadinahQuranTextService;
-        this.defaultFontSize = this.pageSize.width / (16400 / 1000);
-        break;
-      case MushafLayoutType.IndoPak15Lines:
-        this.mushafType = MushafLayoutType.IndoPak15Lines;
-        this.quranTextService = QuranTextIndopak15Service;
-        this.defaultFontSize = this.pageSize.width / (16400 / 1000);
-        break;
-      default:
-        this.mushafType = MushafLayoutType.NewMadinah;
-        this.quranTextService = NewMadinahQuranTextService;
-        this.defaultFontSize = this.pageSize.width / (16200 / 1000);
-        break;
-    }
+    this.applyMushafLayoutType(mushafLayoutType);
 
     this.router.events.subscribe((event) => {
       if (event instanceof NavigationEnd) {
@@ -256,6 +240,30 @@ export abstract class BaseMushafViewerComponent<TView extends MushafPageView> im
     this.itemSize = this.pageSize.height;
 
     this.fontsize = this.defaultFontSize;
+  }
+
+  // Picks mushafType/quranTextService/defaultFontSize for a layout type.
+  // Factored out of the constructor so a subclass can also call it to switch
+  // masahif in place (same component instance, no route navigation) -- see
+  // WasmMasahifComponent.switchMushaf().
+  protected applyMushafLayoutType(mushafLayoutType: MushafLayoutType): void {
+    switch (mushafLayoutType) {
+      case MushafLayoutType.OldMadinah:
+        this.mushafType = MushafLayoutType.OldMadinah;
+        this.quranTextService = OldMadinahQuranTextService;
+        this.defaultFontSize = this.pageSize.width / (16400 / 1000);
+        break;
+      case MushafLayoutType.IndoPak15Lines:
+        this.mushafType = MushafLayoutType.IndoPak15Lines;
+        this.quranTextService = QuranTextIndopak15Service;
+        this.defaultFontSize = this.pageSize.width / (16400 / 1000);
+        break;
+      default:
+        this.mushafType = MushafLayoutType.NewMadinah;
+        this.quranTextService = NewMadinahQuranTextService;
+        this.defaultFontSize = this.pageSize.width / (16200 / 1000);
+        break;
+    }
   }
 
   ngOnInit() {
@@ -368,6 +376,15 @@ export abstract class BaseMushafViewerComponent<TView extends MushafPageView> im
   formatLabel(value: number) {
 
     return Math.round(value * 100) + '%';
+  }
+
+  // Lets the `pages` array be reassigned to a different length (e.g. when
+  // switching between masahif with different page counts) with the *ngFor
+  // correctly adding/removing DOM nodes by position, instead of relying on
+  // the default differ's value-identity matching over an array of
+  // indistinguishable `undefined` entries.
+  trackByIndex(index: number): number {
+    return index;
   }
 
 

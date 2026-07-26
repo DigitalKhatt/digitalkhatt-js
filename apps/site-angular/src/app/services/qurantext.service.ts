@@ -19,6 +19,34 @@ export enum MushafLayoutType {
 
 export const MUSHAFLAYOUTTYPE = new InjectionToken<MushafLayoutType>('MushafLayoutType used');
 
+// Matches the ':type' route segments used by the wasm/hb/ot route configs
+// (see app.routes.ts) -- e.g. WasmMasahifComponent reads/builds these to
+// switch masahif via router.navigate() instead of a per-route DI provider,
+// so that navigating between them reuses the same route config (and thus
+// the same component instance -- see CacheRouteReuseStrategy/Angular's
+// default shouldReuseRoute) rather than destroying and recreating it.
+export function mushafTypeToRouteSegment(mushafType: MushafLayoutType): string {
+  switch (mushafType) {
+    case MushafLayoutType.OldMadinah:
+      return 'oldmedina';
+    case MushafLayoutType.IndoPak15Lines:
+      return 'indopak15';
+    default:
+      return 'newmedina';
+  }
+}
+
+export function mushafTypeFromRouteSegment(segment: string | null): MushafLayoutType {
+  switch (segment) {
+    case 'oldmedina':
+      return MushafLayoutType.OldMadinah;
+    case 'indopak15':
+      return MushafLayoutType.IndoPak15Lines;
+    default:
+      return MushafLayoutType.NewMadinah;
+  }
+}
+
 @Injectable({
   providedIn: 'root',
 })

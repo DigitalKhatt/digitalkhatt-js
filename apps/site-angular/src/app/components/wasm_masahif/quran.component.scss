@@ -21,6 +21,7 @@ $darkgray: #444444;
   height: 100%;
   flex: 0 1 auto;
   touch-action: pan-x pan-y;
+  overflow-x: hidden;
 }
 
 .qurancontainer {
@@ -30,6 +31,28 @@ $darkgray: #444444;
   flex: 0 1 auto;
   touch-action: pan-x pan-y;
   position: relative;
+  overflow-x: hidden;
+}
+
+// On narrow (phone-width) screens the toolbar's buttons/select/slider all
+// have hard pixel widths (see .pagenumber/mat-select/.small-icon-button
+// below), so they can't flex-shrink to fit -- the row genuinely overflows.
+// Without an overflow-x of its own, that overflow used to bleed out into
+// .qurancontainer/body, making the *whole page* (mushaf included) scroll
+// horizontally right along with the toolbar. Giving the toolbar its own
+// horizontal scroll container keeps that scroll contained to the toolbar,
+// the same treatment #viewerContainer gets for the mushaf pages themselves.
+mat-toolbar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 #viewerContainer {
