@@ -88,7 +88,7 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
       /* defaultFontScale = */ 1, sidebarContentsService, scrollDispatcher, ngZone,
       elRef, breakpointObserver, matDialog, router, route);
 
-    this.applyForceCtrl = new UntypedFormControl(false);
+    this.applyForceCtrl = new UntypedFormControl(true);
     this.updateApplyForceAvailability();
 
     this.quranService.statusObserver.subscribe((status) => {
