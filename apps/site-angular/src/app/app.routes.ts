@@ -76,14 +76,7 @@ export const routes: Routes = [
     ]
   },
   {
-    // A single parameterized route (rather than one child route per mushaf,
-    // as 'hb'/'ot' below still do) so that switching masahif -- via
-    // WasmMasahifComponent.selectMushaf()'s router.navigate() -- stays on
-    // the same routeConfig object and Angular's default shouldReuseRoute
-    // (see CacheRouteReuseStrategy) reuses the existing component instance
-    // instead of destroying and recreating it. WasmMasahifComponent reads
-    // the type from ActivatedRoute.paramMap (mushafTypeFromRouteSegment)
-    // rather than the MUSHAFLAYOUTTYPE DI token the other viewers use.
+    // A parameterized route keeps the reader alive while switching editions.
     path: 'wasm',
     children: [
       {
@@ -96,28 +89,14 @@ export const routes: Routes = [
     path: 'ot',
     children: [
       {
-        path: 'oldmedina',
-        component: OTFMushafComponent,
-        providers: [{ provide: MUSHAFLAYOUTTYPE, useValue: MushafLayoutType.OldMadinah }],
-        data: {
-          type: 'oldmedina'
-        },
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'newmedina'
       },
       {
-        path: 'newmedina',
-        component: OTFMushafComponent,
-        providers: [{ provide: MUSHAFLAYOUTTYPE, useValue: MushafLayoutType.NewMadinah }],
-        data: {
-          type: 'newmedina'
-        },
-      },
-      {
-        path: 'indopak15',
-        component: OTFMushafComponent,
-        providers: [{ provide: MUSHAFLAYOUTTYPE, useValue: MushafLayoutType.IndoPak15Lines }],
-        data: {
-          type: 'indopak15'
-        },
+        path: ':type',
+        canMatch: [(_route, segments) => ['newmedina', 'oldmedina', 'indopak15'].includes(segments[0]?.path)],
+        component: OTFMushafComponent
       }
     ]
   },

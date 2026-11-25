@@ -11,7 +11,7 @@ import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { SidebarContentsService } from '../../services/navigation/sidebarcontents';
 import { AboutComponent } from '../about/about.component';
 import { PageNumberBoxComponent } from '../page-number-box/page-number-box.component';
-import { MushafLayoutType, NewMadinahQuranTextService, OldMadinahQuranTextService, QuranTextIndopak15Service, QuranTextService } from '../../services/qurantext.service';
+import { MushafLayoutType, NewMadinahQuranTextService, OldMadinahQuranTextService, QuranTextIndopak15Service, QuranTextService, mushafTypeToRouteSegment } from '../../services/qurantext.service';
 import { RenderingStates } from './rendering_states';
 
 export const MIN_SCALE = 0.25;
@@ -103,10 +103,7 @@ export class PDFPageViewBuffer<TView extends MushafPageView> {
   }
 }
 
-// Base class for HBMedinaComponent (HarfBuzz.js/SVG) and WasmMasahifComponent
-// (WebAssembly/canvas): both page the same Quran layouts through a virtualized
-// scroll viewport, but shape and paint each page very differently, so those
-// parts are left to the subclasses via the abstract members below.
+// Shared navigation and page scheduling for the HarfBuzz, WASM, and OpenType readers.
 @Directive()
 export abstract class BaseMushafViewerComponent<TView extends MushafPageView> implements OnInit, AfterViewInit, OnDestroy {
 
@@ -852,6 +849,12 @@ export abstract class BaseMushafViewerComponent<TView extends MushafPageView> im
       console.log('The dialog was closed');
     });
 
+  }
+
+  selectMushaf(type: MushafLayoutType): void {
+    if (type !== this.mushafType) {
+      this.router.navigate(['/', this.mushafRoutePrefix, mushafTypeToRouteSegment(type)]);
+    }
   }
 
   navigateToMushaf(layoutIndex) {

@@ -10,10 +10,11 @@ import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ScrollDispatcher } from '@angular/cdk/scrolling';
 import { commonModules } from '../../app.config';
-import { MushafLayoutType, mushafTypeFromRouteSegment, mushafTypeToRouteSegment } from '../../services/qurantext.service';
+import { MushafLayoutType, mushafTypeFromRouteSegment } from '../../services/qurantext.service';
 import { MushafSidebarComponent } from '../mushaf-sidebar/mushaf-sidebar.component';
 import { PageNumberBoxComponent } from '../page-number-box/page-number-box.component';
 import { BaseMushafViewerComponent, PDFPageViewBuffer, DEFAULT_CACHE_SIZE } from '../mushaf-viewer/base-mushaf-viewer.component';
+import { MushafSelectorComponent } from '../mushaf-viewer/mushaf-selector.component';
 import { PageView } from './page_view';
 
 // OtLayout::InterLineSpacing (design units), converted to the same "255x410
@@ -40,7 +41,7 @@ const INTERLINE_PT = 1800 * POINTS_PER_DESIGN_UNIT;
     '[class.newmadina]': 'mushafType == MushafLayoutTypeEnum.NewMadinah',
     '[class.indopak]': 'mushafType == MushafLayoutTypeEnum.IndoPak15Lines'
   },
-  imports: [...commonModules, RouterOutlet, RouterLink, MushafSidebarComponent, PageNumberBoxComponent]
+  imports: [...commonModules, RouterOutlet, RouterLink, MushafSidebarComponent, PageNumberBoxComponent, MushafSelectorComponent]
 })
 export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> implements OnInit, AfterViewInit {
 
@@ -79,11 +80,8 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     matDialog: MatDialog,
     router: Router,
     route: ActivatedRoute) {
-    // Unlike hb/ot, the wasm route has no per-mushaf MUSHAFLAYOUTTYPE
-    // provider (see app.routes.ts) -- all three masahif share the single
-    // 'wasm/:type' route, so the initial type comes from the URL segment
-    // itself. ngOnInit's paramMap subscription below picks up any later
-    // change to that same segment (a router.navigate() from selectMushaf()).
+    // The initial layout comes from the :type segment. The same route
+    // instance handles subsequent edition changes in ngOnInit.
     super(mushafTypeFromRouteSegment(route.snapshot.paramMap.get('type')),
       /* defaultFontScale = */ 1, sidebarContentsService, scrollDispatcher, ngZone,
       elRef, breakpointObserver, matDialog, router, route);
@@ -229,20 +227,6 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
     return new PageView(pageElement, index, this.quranService, this.mushafType, this.viewport);
   }
 
-  // Called from the toolbar's mushaf-switcher menu. Navigates rather than
-  // calling switchMushaf() directly, so the URL reflects the current mushaf
-  // (bookmarkable/shareable, works with back/forward) -- since this stays
-  // on the same 'wasm/:type' routeConfig (see app.routes.ts), Angular's
-  // default shouldReuseRoute keeps this same component instance alive and
-  // just re-emits ActivatedRoute.paramMap, which ngOnInit's subscription
-  // above turns back into the actual switchMushaf() rebuild.
-  selectMushaf(newType: MushafLayoutType): void {
-    if (newType === this.mushafType) {
-      return;
-    }
-    this.router.navigate([`/${this.mushafRoutePrefix}/${mushafTypeToRouteSegment(newType)}`]);
-  }
-
   // Switches masahif in place -- no component destroy/recreate (see
   // selectMushaf() above) and no re-running the (already-resolved, since
   // WasmMushafService is a shared singleton -- see the constructor comment
@@ -369,9 +353,7 @@ export class WasmMasahifComponent extends BaseMushafViewerComponent<PageView> im
   // WasmMushafService.requestShaping() -- instead of here. That lets the
   // scheduler start multiple pages' draw() calls concurrently (one shaping,
   // another sitting in PageView.pause()'s pausePromise waiting to see if
-  // it's still wanted) without one blocking the other, matching how
-  // hbmedina's/otfmushaf's chunked, genuinely-interruptible renderers were
-  // already free to do.
+  // it's still wanted) without one blocking the other.
   protected drawView(view: PageView, canvasWidth: number, canvasHeight: number): Promise<any> {
     return view.draw(canvasWidth, canvasHeight, this.tajweedColorCtrl.value,
       this.applyForceCtrl.value, this.fontScale, this.viewport.hasRestrictedScaling);

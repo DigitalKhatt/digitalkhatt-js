@@ -79,8 +79,19 @@
   align-items: center;
 }
 
-.digitalkhatt {
-  font-family: digitalkhatt;
+.opentype-downloads {
+  border-collapse: collapse;
+
+  th, td {
+    padding: 0.4em 1em 0.4em 0;
+    text-align: start;
+  }
+}
+
+.opentype-sample {
+  max-width: 300px;
+  text-align: center;
+  font-family: 'DigitalKhatt New Madina';
   font-size: 16px;
   line-height: normal;
 }

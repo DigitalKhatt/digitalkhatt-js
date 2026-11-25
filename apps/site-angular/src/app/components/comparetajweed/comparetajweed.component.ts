@@ -1,3 +1,5 @@
+import { MushafLayoutType } from '../../services/qurantext.service';
+import { OPENTYPE_FONT_FAMILIES } from '../../services/opentype-fonts';
 import { AfterViewInit, Component, OnInit, ViewChild } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 
@@ -246,8 +248,8 @@ export class CompareTajweedComponent implements OnInit, AfterViewInit {
 
 
 
-  getFontFamily(layout) {
-    return layout === "NewMadinah" ? 'madina' : layout === "OldMadinah" ? 'oldmadina' : 'indopak';
+  getFontFamily(layout: keyof typeof MushafLayoutType): string {
+    return OPENTYPE_FONT_FAMILIES[MushafLayoutType[layout] ?? MushafLayoutType.IndoPak15Lines];
   }
 
   showWord(word) {

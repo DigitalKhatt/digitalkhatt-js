@@ -72,26 +72,7 @@
             <mat-slide-toggle [formControl]="applyForceCtrl">Optimize marks</mat-slide-toggle>
           </div>
         </mat-menu>
-        <button mat-icon-button [matMenuTriggerFor]="mushafMenu" title="Switch Mushaf">
-          <mat-icon>menu_book</mat-icon>
-        </button>
-        <mat-menu #mushafMenu="matMenu" class="panelClass">
-          <button mat-menu-item type="button" [disabled]="mushafType === MushafLayoutTypeEnum.NewMadinah"
-                  (click)="selectMushaf(MushafLayoutTypeEnum.NewMadinah)">
-            <mat-icon *ngIf="mushafType === MushafLayoutTypeEnum.NewMadinah">check</mat-icon>
-            New Madinah
-          </button>
-          <button mat-menu-item type="button" [disabled]="mushafType === MushafLayoutTypeEnum.OldMadinah"
-                  (click)="selectMushaf(MushafLayoutTypeEnum.OldMadinah)">
-            <mat-icon *ngIf="mushafType === MushafLayoutTypeEnum.OldMadinah">check</mat-icon>
-            Old Madinah
-          </button>
-          <button mat-menu-item type="button" [disabled]="mushafType === MushafLayoutTypeEnum.IndoPak15Lines"
-                  (click)="selectMushaf(MushafLayoutTypeEnum.IndoPak15Lines)">
-            <mat-icon *ngIf="mushafType === MushafLayoutTypeEnum.IndoPak15Lines">check</mat-icon>
-            IndoPak (15 lines)
-          </button>
-        </mat-menu>
+        <app-mushaf-selector [mushafType]="mushafType" (mushafSelected)="selectMushaf($event)"></app-mushaf-selector>
         <button *ngIf="!isTouchDevice" mat-icon-button (click)="toggleFullScreen()" title="Fullscreen">
           <mat-icon>fullscreen</mat-icon>
         </button>

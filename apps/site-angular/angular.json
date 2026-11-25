@@ -23,7 +23,12 @@
             ],
             "tsConfig": "tsconfig.app.json",
             "assets": [
-              "src/assets",
+              {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "assets",
+                "ignore": ["fonts/opentype/**"]
+              },
               "src/favicon.png"
             ],
             "styles": [

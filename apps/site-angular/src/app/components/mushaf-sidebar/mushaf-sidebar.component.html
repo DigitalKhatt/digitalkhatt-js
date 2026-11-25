@@ -2,7 +2,8 @@
   <mat-card appearance="outlined" style="overflow: auto; " mat-elevation-z8>
 
     <div *ngFor="let item of outline">
-      <button mat-button type="button" (click)="select(item)" style="direction: rtl; width: 100%; text-align: right; font-family: madina;font-size:larger">{{item.name}}</button>
+      <button mat-button type="button" (click)="select(item)" lang="ar" dir="rtl" class="surah"
+              [style.font-family]="fontFamily">{{item.name}}</button>
     </div>
 
   </mat-card>

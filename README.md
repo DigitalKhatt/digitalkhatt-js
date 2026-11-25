@@ -2,6 +2,8 @@
 
 JavaScript/TypeScript platform for DigitalKhatt—shared core libraries and UI adapters (Angular, React, React Native), including the source code of the digitalkhatt.org website, which displays [the Holy Quran](https://digitalkhatt.org/digitalmushaf) typeset using [DigitalKhatt](https://digitalkhatt.org/about).
 
+Run `npm --prefix apps/site-angular start` from this repository to start the website locally. [Website setup](apps/site-angular/README.md)
+
 [PDF.js](https://github.com/mozilla/pdf.js) has been of great help in the coding of the page viewer.
 
 You can follow the project on Twitter at [@DigitalKhatt](https://twitter.com/DigitalKhatt)

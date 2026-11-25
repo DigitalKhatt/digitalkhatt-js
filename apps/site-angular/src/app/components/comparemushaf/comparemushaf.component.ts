@@ -328,10 +328,6 @@ export class CompareMushafComponent implements OnInit, AfterViewInit {
 
 
 
-  getFontFamily(layout) {
-    return layout === "NewMadinah" ? 'madina' : layout === "OldMadinah" ? 'oldmadina' : 'indopak';
-  }
-
   showWord(word) {
     alert(`page = ${word.page} line=${word.line}`)
   }

@@ -1,328 +1,134 @@
 /*
  * Copyright 2012 Mozilla Foundation (Some code is derived from https://github.com/mozilla/pdf.js/blob/master/web/pdf_page_view.js)
-*/
-import { MushafLayoutType, QuranTextService } from "../../services/qurantext.service";
-import { TajweedService } from "../../services/tajweed.service";
-import { HBFeature, hb as HarfBuzz, HarfBuzzBuffer, HarfBuzzFont, getWidth, harfbuzzFonts } from "./harfbuzz";
-import { FONTSIZE, INTERLINE, JustResultByLine, JustStyle, LineTextInfo, MARGIN, PAGE_WIDTH, SpaceType, analyzeLineForJust, justifyLine } from './just.service';
-import { PageFormat } from "./otfmushaf.component";
+ */
+import { LineType, QuranTextService } from '../../services/qurantext.service';
+import { MushafPageView, PageFormat } from '../mushaf-viewer/base-mushaf-viewer.component';
+import { RenderingStates } from '../mushaf-viewer/rendering_states';
 
-import { RenderingStates } from './rendering_states';
+export const PAGE_WIDTH = 17000;
+export const INTERLINE = 1800;
+const MARGIN = 400;
 
-const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-class PageView {
-  renderingState: RenderingStates;
-  private viewport: PageFormat;
-  private loadingIconDiv;
-  id;
-  resume;
-
-  public renderingId;
-  zoomLayer;
-  private calculatewidthElem;
-  private lineJustify;
-  private lastDrawTime;
-  private maxIterTime = 8000
-  private pausePromise: Promise<Boolean>;
-  private quranText: string[][];
-  private oldMedinaFont: HarfBuzzFont
-  private ayaSvgGroup: SVGGElement
-  private ayaLength: number;
-  private spaceWidth;
-  private justStyle = JustStyle.XScale
-  constructor(public div, private pageIndex, calculatewidthElem, lineJustify, viewport,
-    private tajweedService: TajweedService, private quranTextService: QuranTextService) {
-    this.renderingState = RenderingStates.INITIAL;
-
-    this.calculatewidthElem = calculatewidthElem
-    this.lineJustify = lineJustify
-    this.id = pageIndex + 1;
-    this.renderingId = 'page' + this.id;
-
-    this.viewport = viewport;
-
-    this.div.style.width = this.viewport.width + 'px';
-    this.div.style.height = this.viewport.height + 'px';
-    this.oldMedinaFont = harfbuzzFonts.get("oldmadina")
-
-    const svgAyaElem: SVGSVGElement = document.getElementById("ayaGlyph") as any
-    this.ayaSvgGroup = svgAyaElem?.firstElementChild as SVGGElement;
-    this.ayaLength = quranTextService.mushafType == MushafLayoutType.OldMadinah ? 3
-      : quranTextService.mushafType == MushafLayoutType.NewMadinah ? 14
-        : 0;
-
-
-
-    /*
-    this.loadingIconDiv = document.createElement('div');
-    this.loadingIconDiv.className = 'loadingIcon';
-    div.appendChild(this.loadingIconDiv);*/
-
-    this.zoomLayer = null;
-
-    this.quranText = quranTextService.quranText;
-
-    this.spaceWidth = getWidth(" ", this.oldMedinaFont, FONTSIZE, null);
+export function fitMushafLines(root: HTMLElement): void {
+  const lines = Array.from(root.querySelectorAll<HTMLElement>('.justifyline'));
+  for (const line of lines) {
+    line.style.transform = '';
   }
 
-  pause() {
-    if (this.renderingState === RenderingStates.RUNNING && this.resume == null) {
-      this.renderingState = RenderingStates.PAUSED
-      this.pausePromise = new Promise((resolve, reject) => {
-        this.resume = () => {
-          if (this.renderingState === RenderingStates.PAUSED) {
-            resolve(true)
-            this.renderingState = RenderingStates.RUNNING
-          } else {
-            resolve(false)
-          }
-          this.resume = null;
-        }
-      });
+  const range = document.createRange();
+  const scales = lines.map(line => {
+    const box = line.getBoundingClientRect();
+    range.selectNodeContents(line);
+    const width = box.right - range.getBoundingClientRect().left;
+    return box.width > 0 && width > box.width ? box.width / width : 1;
+  });
+
+  lines.forEach((line, index) => {
+    if (scales[index] < 1) {
+      line.style.transform = 'scaleX(' + scales[index] + ')';
     }
-
-  }
-
-  private isPaused() {
-    return this.renderingState === RenderingStates.PAUSED
-  }
-
-  async draw(canvasWidth, canvasHeight, texFormat, tajweedColor) {
-
-    let startDraw = performance.now();
-
-    if (this.renderingState !== RenderingStates.INITIAL) {
-      return;
-    }
-
-
-    this.lastDrawTime = performance.now()
-
-    const pageElem = this.div;
-
-    this.renderingState = RenderingStates.RUNNING;
-
-    this.lineJustify.style.width = pageElem.style.width;
-    this.lineJustify.style.fontSize = pageElem.style.fontSize
-
-    const lineCount = this.quranText[this.pageIndex].length;
-
-    let temp = document.createElement('div');
-
-    const scale = this.viewport.width / PAGE_WIDTH;
-
-    let defaultMargin = MARGIN * scale
-    let lineWidth = this.viewport.width - 2 * defaultMargin;
-    const fontSizeLineWidthRatio = this.viewport.fontSize / lineWidth
-
-    // found minimum font size
-
-    let minRatio = 100;
-    let maxRatio = 0;
-
-    const glyphScale = this.viewport.fontSize / FONTSIZE
-
-    const fontSizeRatio: number[] = [];
-
-    for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
-      const lineInfo = this.quranTextService.getLineInfo(this.pageIndex, lineIndex)
-      if (lineInfo.lineType === 0 || (lineInfo.lineType == 2 && (this.pageIndex == 0 || this.pageIndex == 1))) {
-        const lineText = this.quranText[this.pageIndex][lineIndex]
-
-        const lineWidthUPEM = FONTSIZE / fontSizeLineWidthRatio
-
-        const desiredWidth = lineInfo.lineWidthRatio * lineWidthUPEM;
-
-        let currentLineWidth = getWidth(lineText, this.oldMedinaFont, FONTSIZE, null)
-
-        const ratio = desiredWidth / currentLineWidth;
-        fontSizeRatio[lineIndex] = ratio;
-        minRatio = Math.min(ratio, minRatio);
-        maxRatio = Math.max(ratio, maxRatio);
-      }
-    }
-    let tajweedResult
-    if (tajweedColor) {
-      const startTime = performance.now();
-      tajweedResult = this.tajweedService.applyTajweedByPage(this.quranTextService, this.pageIndex)
-      const endTime = performance.now();
-      //console.log(`applyTajweed in page ${this.pageIndex + 1} takes ${endTime - startTime} ms`)
-    }
-
-    for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
-      const bism = (this.pageIndex === 0 || this.pageIndex === 1) && (lineIndex == 1);
-      const lineInfo = this.quranTextService.getLineInfo(this.pageIndex, lineIndex)
-      const lineElem = document.createElement('div');
-
-      let margin = defaultMargin
-
-      lineElem.classList.add('line');
-      if (lineInfo.lineType === 0 && !bism) {
-        if (lineInfo.lineWidthRatio !== 1) {
-
-          const newlineWidth = lineWidth * lineInfo.lineWidthRatio
-          margin += (lineWidth - newlineWidth) / 2
-        }
-        lineElem.style.marginLeft = margin + "px";
-        lineElem.style.marginRight = lineElem.style.marginLeft
-        lineElem.style.height = INTERLINE * scale + "px";
-        const lineText = this.quranText[this.pageIndex][lineIndex]
-
-        const innerSpan = document.createElement('div');
-        innerSpan.classList.add("justifyline")
-        if (lineInfo.sajda) {
-          innerSpan.innerHTML = lineText.replace(lineInfo.sajda.text,`<span class ='sajda'>${lineInfo.sajda.text}</span>`);
-        }else{
-          innerSpan.textContent = lineText;
-        }              
-        innerSpan.style.lineHeight = lineElem.style.height
-        innerSpan.style.fontSize = this.viewport.fontSize + "px"
-        lineElem.appendChild(innerSpan);
-
-      } else if (lineInfo.lineType === 1) {
-        lineElem.style.textAlign = "center"
-        lineElem.style.marginLeft = margin + "px";
-        lineElem.style.marginRight = lineElem.style.marginLeft
-        lineElem.style.height = INTERLINE * scale + "px";
-        const lineText = this.quranText[this.pageIndex][lineIndex]
-
-        lineElem.classList.add("linesuran")
-        if (this.pageIndex === 0 || this.pageIndex === 1) {
-          lineElem.style.paddingBottom = 2 * scale * INTERLINE + "px"
-        }
-        const innerSpan = document.createElement('span');
-        innerSpan.textContent = lineText;
-        innerSpan.classList.add("innersura")
-        innerSpan.style.lineHeight = lineElem.style.height
-        innerSpan.style.fontSize = this.viewport.fontSize * 0.9 + "px"
-        lineElem.appendChild(innerSpan);
-      } else if (lineInfo.lineType === 2 || bism) /* basmala */ {
-        lineElem.style.textAlign = "center"
-        lineElem.style.marginLeft = margin + "px";
-        lineElem.style.marginRight = lineElem.style.marginLeft
-        lineElem.style.height = INTERLINE * scale + "px";
-
-        const lineText = this.quranText[this.pageIndex][lineIndex]
-
-        lineElem.classList.add("linebism")
-
-        const innerSpan = document.createElement('span');
-        innerSpan.textContent = lineText;
-        if (this.pageIndex == 0 || this.pageIndex == 1) {
-          innerSpan.classList.add("bismfeature")
-          if (isSafari) {
-            if(this.quranTextService.mushafType != MushafLayoutType.IndoPak15Lines){
-              innerSpan.style.left = 700 *  glyphScale + "px";
-            }            
-            innerSpan.style.fontSize = this.viewport.fontSize + "px"
-          }
-        } else {
-          innerSpan.classList.add("basmfeature");
-          if (isSafari) {
-            if(this.quranTextService.mushafType === MushafLayoutType.NewMadinah){
-              innerSpan.style.left = 900 *  glyphScale + "px";
-            } else if(this.quranTextService.mushafType == MushafLayoutType.OldMadinah){
-              innerSpan.style.right = 2000 *  glyphScale + "px";
-            }              
-            innerSpan.style.fontSize = this.viewport.fontSize * 0.9 + "px"
-          }
-        }
-
-        innerSpan.style.lineHeight = lineElem.style.height
-        innerSpan.style.fontSize = this.viewport.fontSize * 0.95 + "px"
-        lineElem.appendChild(innerSpan);
-      }
-
-      temp.appendChild(lineElem);
-      if (performance.now() - this.lastDrawTime > 16) {
-        await new Promise(resolve => {
-          requestAnimationFrame(resolve);
-        })
-        if (this.isPaused()) {
-          const cont = await this.pausePromise
-          if (!cont) return;
-        } else if (this.renderingState !== RenderingStates.RUNNING) return;
-        this.lastDrawTime = performance.now()
-      }
-    }
-
-    while (temp.firstChild) {
-      pageElem.appendChild(temp.firstChild);
-    }
-
-    this.renderingState = RenderingStates.FINISHED;
-
-    if (this.loadingIconDiv) {
-      this.div.removeChild(this.loadingIconDiv);
-      delete this.loadingIconDiv;
-    }
-
-    let endDraw = performance.now();
-    console.info(`draw page ${this.id} take ${endDraw - startDraw} ms`)
-
-  }
-  reset(keepZoomLayer = false) {
-
-    const div = this.div;
-    div.style.width = this.viewport.width + 'px';
-    div.style.height = this.viewport.height + 'px';
-    div.style.fontSize = this.viewport.fontSize + 'px';
-
-    this.renderingState = RenderingStates.INITIAL;
-
-
-    if (this.resume) {
-      this.resume();
-    }
-
-    div.removeAttribute('data-loaded');
-
-
-
-    const currentZoomLayerNode = (keepZoomLayer && this.zoomLayer) || null;
-
-    while (div.firstChild) {
-      div.removeChild(div.lastChild);
-    }
-
-
-  }
-
-  update(viewport, duringZoom: boolean = false) {
-    this.viewport = viewport;
-
-
-    if (this.zoomLayer) {
-      this.zoomLayer.style.width = this.viewport.width + 'px';
-      this.zoomLayer.style.height = this.viewport.height + 'px';
-    }
-
-    this.reset(true);
-  }
-
-  destroy() {
-    this.reset(false);
-  }
-
-  private resetZoomLayer(removeFromDOM = false) {
-    if (!this.zoomLayer) {
-      return;
-    }
-    let zoomLayerCanvas = this.zoomLayer; //.firstChild;
-    //this.paintedViewportMap.delete(zoomLayerCanvas);
-    // Zeroing the width and height causes Firefox to release graphics
-    // resources immediately, which can greatly reduce memory consumption.
-    zoomLayerCanvas.width = 0;
-    zoomLayerCanvas.height = 0;
-
-    if (removeFromDOM) {
-      // Note: `ChildNode.remove` doesn't throw if the parent node is undefined.
-      this.zoomLayer.remove();
-    }
-    this.zoomLayer = null;
-  }
-
+  });
 }
 
-export { PageView };
+export class PageView implements MushafPageView {
+  readonly id: number;
+  renderingState = RenderingStates.INITIAL;
+  private viewport: PageFormat;
+
+  constructor(
+    public readonly div: HTMLElement, private readonly pageIndex: number, viewport: PageFormat,
+    private readonly quranTextService: QuranTextService,
+  ) {
+    this.id = pageIndex + 1;
+    this.update(viewport);
+  }
+
+  async draw(): Promise<void> {
+    if (this.renderingState !== RenderingStates.INITIAL) return;
+
+    this.renderingState = RenderingStates.RUNNING;
+    const content = document.createDocumentFragment();
+    const scale = this.viewport.width / PAGE_WIDTH;
+    const margin = MARGIN * scale;
+    const lineWidth = this.viewport.width - 2 * margin;
+    const lineHeight = INTERLINE * scale;
+
+    const lines = this.quranTextService.quranText[this.pageIndex];
+    for (const [lineIndex, text] of lines.entries()) {
+      const info = this.quranTextService.getLineInfo(this.pageIndex, lineIndex);
+      const line = document.createElement('div');
+      line.classList.add('line');
+      line.style.height = lineHeight + 'px';
+      const firstBasmala = this.pageIndex < 2 && lineIndex === 1;
+      const widthRatio = info.lineType === LineType.Content && !firstBasmala ? info.lineWidthRatio : 1;
+      const sideMargin = margin + lineWidth * (1 - widthRatio) / 2;
+      line.style.marginInline = sideMargin + 'px';
+
+      if (info.lineType === LineType.Content && !firstBasmala) {
+        const body = document.createElement('div');
+        body.className = 'justifyline';
+        body.style.lineHeight = line.style.height;
+        body.style.fontSize = this.viewport.fontSize + 'px';
+        this.setLineText(body, text, info.sajda?.text);
+        line.append(body);
+      } else if (info.lineType === LineType.Sura) {
+        line.classList.add('linesuran');
+        line.style.textAlign = 'center';
+        if (this.pageIndex < 2) {
+          line.style.paddingBottom = 2 * lineHeight + 'px';
+        }
+        const title = document.createElement('span');
+        title.className = 'innersura';
+        title.textContent = text;
+        title.style.lineHeight = line.style.height;
+        title.style.fontSize = 0.9 * this.viewport.fontSize + 'px';
+        line.append(title);
+      } else {
+        line.classList.add('linebism');
+        const basmala = document.createElement('span');
+        basmala.className = this.pageIndex < 2 ? 'bismfeature' : 'basmfeature';
+        basmala.textContent = text;
+        basmala.style.lineHeight = line.style.height;
+        basmala.style.fontSize = 0.95 * this.viewport.fontSize + 'px';
+        line.append(basmala);
+      }
+
+      content.append(line);
+    }
+
+    this.div.append(content);
+    fitMushafLines(this.div);
+    this.div.dataset.loaded = 'true';
+    this.renderingState = RenderingStates.FINISHED;
+  }
+
+  private setLineText(element: HTMLElement, text: string, sajda: string | undefined): void {
+    const start = sajda ? text.indexOf(sajda) : -1;
+    if (start === -1) {
+      element.textContent = text;
+      return;
+    }
+    const marker = document.createElement('span');
+    marker.className = 'sajda';
+    marker.textContent = sajda;
+    element.append(text.slice(0, start), marker, text.slice(start + sajda.length));
+  }
+
+  // A DOM page is composed synchronously before returning to the shared scheduler.
+  pause(): void {}
+  resume(): void {}
+
+  update(viewport: PageFormat): void {
+    this.viewport = viewport;
+    this.div.style.width = viewport.width + 'px';
+    this.div.style.height = viewport.height + 'px';
+    this.div.style.fontSize = viewport.fontSize + 'px';
+    this.destroy();
+  }
+
+  destroy(): void {
+    this.div.replaceChildren();
+    this.div.dataset.loaded = 'false';
+    this.renderingState = RenderingStates.INITIAL;
+  }
+}

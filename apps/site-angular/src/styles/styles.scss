@@ -56,22 +56,25 @@ body {
 }
 
 @font-face {
-  font-family: ctmadina;
+  font-family: 'DigitalKhatt New Madina';
   font-style: normal;
-  src: url('../assets/fonts/coretext/DigitalKhattV2.ttf') format("opentype");
+  font-weight: 400 700;
+  src: url('../assets/fonts/opentype/DigitalKhattNewMadina-VF.woff2') format('woff2');
   font-display: block;
 }
 
 @font-face {
-  font-family: ctoldmadina;
+  font-family: 'DigitalKhatt Old Madina';
   font-style: normal;
-  src: url('../assets/fonts/coretext/DigitalKhattQuranic.ttf') format("opentype");
+  font-weight: 400 700;
+  src: url('../assets/fonts/opentype/DigitalKhattOldMadina-VF.woff2') format('woff2');
   font-display: block;
 }
 
 @font-face {
-  font-family: ctindopak;
+  font-family: 'DigitalKhatt IndoPak';
   font-style: normal;
-  src: url('../assets/fonts/coretext/DigitalKhattIndoPak.ttf') format("opentype");
+  font-weight: 400 700;
+  src: url('../assets/fonts/opentype/DigitalKhattIndoPak-VF.woff2') format('woff2');
   font-display: block;
 }

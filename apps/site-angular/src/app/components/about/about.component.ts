@@ -31,6 +31,13 @@ export class AboutComponent implements OnInit, AfterViewInit {
   glyphNames = ['behshape.isol.expa', 'behshape.fina.expa', 'feh.isol.expa', 'feh.fina.expa', 'kaf.fina.expa', 'kaf.fina.afterlam.expa', 'noon.isol.expa', 'noon.fina.expa', 'alefmaksura.isol.expa', 'yehshape.fina.expa', 'qaf.isol.expa', 'qaf.fina.expa', 'seen.isol.expa', 'seen.fina.expa',
     'sad.isol.expa', 'sad.fina.expa'];
 
+  protected readonly fontEditions = [
+    { name: 'New Madina', reader: 'newmedina', fileStem: 'DigitalKhattNewMadina-VF' },
+    { name: 'Old Madina', reader: 'oldmedina', fileStem: 'DigitalKhattOldMadina-VF' },
+    { name: 'IndoPak', reader: 'indopak15', fileStem: 'DigitalKhattIndoPak-VF' },
+  ];
+  protected readonly fontDownloadBase = 'https://github.com/DigitalKhatt/typesetting/releases/latest/download/';
+
   pageSize = { width: 255, height: 410 };
 
   constructor(

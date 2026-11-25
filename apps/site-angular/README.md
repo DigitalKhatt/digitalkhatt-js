@@ -4,7 +4,22 @@ This project was generated with [Angular CLI](https://github.com/angular/angular
 
 ## Development server
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+From `apps/site-angular`, run `npm start` and open `http://localhost:4200/`. The app reloads when source files change.
+
+## OpenType reader
+
+Open `/ot` and select New Madina, Old Madina, or IndoPak in the Mushaf menu.
+The reader uses browser shaping with the WOFF2 fonts and exposes
+the full 400–700 weight range. It shares the edition menu, Surah sidebar and
+page navigation with the WASM reader.
+
+The reader uses the three WOFF2 files in `src/assets/fonts/opentype/`.
+Run `npm run update:fonts` from `apps/site-angular` to download and verify
+those files from the latest Typesetting release. Production builds add a
+content hash to their URLs through the `@font-face` rules in `styles.scss`.
+The About page links to GitHub’s Latest release for the TTF and WOFF2 downloads.
+
+The native and HarfBuzz justification demos use their own font assets.
 
 ## Code scaffolding
 
@@ -12,7 +27,7 @@ Run `ng generate component component-name` to generate a new component. You can 
 
 ## Build
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `--prod` flag for a production build.
+Run `npm run build` to build the project. The build artifacts will be stored in the `dist/` directory. Use `npm run build -- --configuration production` to select the production configuration explicitly.
 
 ## Running unit tests
 
