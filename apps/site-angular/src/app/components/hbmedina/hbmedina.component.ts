@@ -18,6 +18,8 @@ import { MushafSidebarComponent } from '../mushaf-sidebar/mushaf-sidebar.compone
 import { PageNumberBoxComponent } from '../page-number-box/page-number-box.component';
 import { BaseMushafViewerComponent } from '../mushaf-viewer/base-mushaf-viewer.component';
 import { PageView } from './page_view';
+import madinaFontUrl from '../../../assets/fonts/hb/madina.otf';
+import indopakFontUrl from '../../../assets/fonts/hb/indopak.otf';
 
 @Component({
   selector: 'app-medina-component',
@@ -78,9 +80,9 @@ export class HBMedinaComponent extends BaseMushafViewerComponent<PageView> imple
         if (this.mushafType === MushafLayoutType.OldMadinah) {
           await loadAndCacheFont("oldmadina", "assets/fonts/hb/oldmadina.otf")
         } else if (this.mushafType === MushafLayoutType.NewMadinah) {
-          await loadAndCacheFont("oldmadina", "assets/fonts/hb/madina.otf")
+          await loadAndCacheFont("oldmadina", madinaFontUrl)
         } else {
-          await loadAndCacheFont("oldmadina", "assets/fonts/hb/indopak.otf")
+          await loadAndCacheFont("oldmadina", indopakFontUrl)
         }
 
         document.fonts.load("12px oldmadina").then(() => {

@@ -27,13 +27,20 @@
                 "glob": "**/*",
                 "input": "src/assets",
                 "output": "assets",
-                "ignore": ["fonts/opentype/**"]
+                "ignore": [
+                  "fonts/opentype/**",
+                  "fonts/oldmadina.woff2",
+                  "fonts/oldmadina.otf",
+                  "fonts/hb/madina.otf",
+                  "fonts/hb/indopak.otf"
+                ]
               },
               "src/favicon.png"
             ],
             "styles": [
               "src/styles/styles.scss"
             ],
+            "loader": { ".otf": "file" },
             "scripts": [],
             "extractLicenses": false,
             "sourceMap": true,
