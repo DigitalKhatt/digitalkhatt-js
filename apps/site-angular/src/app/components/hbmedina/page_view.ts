@@ -350,11 +350,11 @@ class PageView {
 
       const space = lineTextInfo.spaces.get(glyph.Cluster)
 
-      if (startSajdaIndex && glyph.Cluster === startSajdaIndex && !startSajdaPos) {
+      if (startSajdaIndex !== undefined && glyph.Cluster === startSajdaIndex && startSajdaPos === undefined) {
         startSajdaPos = currentxPos
       }
 
-      if (endSajdaIndex && glyph.Cluster === endSajdaIndex && !endSajdaPos) {
+      if (endSajdaIndex !== undefined && glyph.Cluster === endSajdaIndex && endSajdaPos === undefined) {
         endSajdaPos = currentxPos
       }
 
@@ -434,7 +434,7 @@ class PageView {
       }
     }
 
-    if (startSajdaPos && endSajdaPos) {
+    if (startSajdaPos !== undefined && endSajdaPos !== undefined) {
       let line = document.createElementNS('http://www.w3.org/2000/svg', "line");
       line.setAttribute('x1', startSajdaPos)
       line.setAttribute('x2', endSajdaPos)
